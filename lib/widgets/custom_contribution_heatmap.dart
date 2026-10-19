@@ -52,7 +52,7 @@ class _CustomContributionHeatmapState extends State<CustomContributionHeatmap> {
     final todayNorm = AppDateUtils.normalizeDate(widget.today);
     final daysDiff = todayNorm.difference(alignedStart).inDays;
     final weekIndex = daysDiff ~/ 7;
-    const colWidth = 25.0; // cellWidth (21) + spacing (4)
+    const colWidth = 20.0; // cellWidth (16) + spacing (4)
     final targetOffset = (weekIndex * colWidth) - 150;
     _scrollController.jumpTo(targetOffset.clamp(0.0, _scrollController.position.maxScrollExtent));
   }
@@ -64,10 +64,9 @@ class _CustomContributionHeatmapState extends State<CustomContributionHeatmap> {
 
   @override
   Widget build(BuildContext context) {
-    const double cellWidth = 21.0;
-    const double cellHeight = 15.0;
+    const double cellSize = 16.0;
     const double cellSpacing = 4.0;
-    const double colWidth = cellWidth + cellSpacing;
+    const double colWidth = cellSize + cellSpacing;
 
     final startDate = AppDateUtils.normalizeDate(widget.minDate);
     final alignedStart = startDate.subtract(Duration(days: startDate.weekday - 1));
@@ -100,7 +99,6 @@ class _CustomContributionHeatmapState extends State<CustomContributionHeatmap> {
           final firstDay = week.firstWhere((d) => d != null, orElse: () => null);
           String headerLabel = '';
           bool isYearLabel = false;
-
           if (firstDay != null) {
             if (firstDay.month == 1) {
               if (lastYear == null || firstDay.year != lastYear) {
@@ -145,12 +143,12 @@ class _CustomContributionHeatmapState extends State<CustomContributionHeatmap> {
                   ),
                 ),
                 const SizedBox(height: 2),
-                // 7 Day cells
+                // 7 Day square cells
                 ...week.map((date) {
                   if (date == null) {
                     return Container(
-                      width: cellWidth,
-                      height: cellHeight,
+                      width: cellSize,
+                      height: cellSize,
                       margin: const EdgeInsets.only(bottom: cellSpacing),
                     );
                   }
@@ -161,12 +159,7 @@ class _CustomContributionHeatmapState extends State<CustomContributionHeatmap> {
                   final actual = dayData?.actualCount ?? 0;
                   final isToday = AppDateUtils.isSameDay(normDate, widget.today);
 
-                  // Left half: Target (planned)
-                  final leftColor = target > 0
-                      ? AppColors.primary.withOpacity(0.25)
-                      : const Color(0xFF222222);
-
-                  // Right half proportion: actual / target (capped between 0.0 and 1.0)
+                  // Completion fraction (bottom to top fill)
                   final double fraction = target > 0
                       ? (actual / target).clamp(0.0, 1.0)
                       : (actual > 0 ? 1.0 : 0.0);
@@ -176,10 +169,11 @@ class _CustomContributionHeatmapState extends State<CustomContributionHeatmap> {
                     child: Tooltip(
                       message: '${AppDateUtils.formatDateDisplay(normDate)}\nПлан: $target, Выполнено: $actual',
                       child: Container(
-                        width: cellWidth,
-                        height: cellHeight,
+                        width: cellSize,
+                        height: cellSize,
                         margin: const EdgeInsets.only(bottom: cellSpacing),
                         decoration: BoxDecoration(
+                          color: const Color(0xFF858585),
                           border: isToday
                               ? Border.all(color: AppColors.secondary, width: 1.5)
                               : null,
@@ -187,31 +181,15 @@ class _CustomContributionHeatmapState extends State<CustomContributionHeatmap> {
                         ),
                         child: ClipRRect(
                           borderRadius: BorderRadius.circular(isToday ? 2.5 : 4),
-                          child: Row(
-                            children: [
-                              // Left half (Target)
-                              Expanded(
-                                child: Container(
-                                  color: leftColor,
-                                ),
+                          child: Align(
+                            alignment: Alignment.bottomCenter,
+                            child: FractionallySizedBox(
+                              heightFactor: fraction,
+                              alignment: Alignment.bottomCenter,
+                              child: Container(
+                                color: AppColors.primary,
                               ),
-                              // Right half (Actual scaled bottom-to-top)
-                              Expanded(
-                                child: Container(
-                                  color: const Color(0xFF222222),
-                                  child: Align(
-                                    alignment: Alignment.bottomCenter,
-                                    child: FractionallySizedBox(
-                                      heightFactor: fraction,
-                                      alignment: Alignment.bottomCenter,
-                                      child: Container(
-                                        color: AppColors.primary,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ],
+                            ),
                           ),
                         ),
                       ),
