@@ -91,15 +91,28 @@ class HabitsRepository {
     return db.select(db.habitCompletions).get();
   }
 
-  /// Toggles habit completion status for a specific date (Upsert).
+  /// Toggles habit completion status for a specific date (Upsert with proper existence check).
   Future<void> toggleHabitCompletion(int habitId, DateTime date, bool isCompleted) async {
     final normalizedDate = AppDateUtils.normalizeDate(date);
-    await db.into(db.habitCompletions).insertOnConflictUpdate(
-          HabitCompletionsCompanion.insert(
-            habitId: habitId,
-            date: normalizedDate,
-            isCompleted: Value(isCompleted),
-          ),
-        );
+
+    final existing = await (db.select(db.habitCompletions)
+          ..where((tbl) => tbl.habitId.equals(habitId) & tbl.date.equals(normalizedDate)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.habitCompletions)
+            ..where((tbl) => tbl.id.equals(existing.id)))
+          .write(HabitCompletionsCompanion(
+        isCompleted: Value(isCompleted),
+      ));
+    } else {
+      await db.into(db.habitCompletions).insert(
+            HabitCompletionsCompanion.insert(
+              habitId: habitId,
+              date: normalizedDate,
+              isCompleted: Value(isCompleted),
+            ),
+          );
+    }
   }
 }

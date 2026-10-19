@@ -246,6 +246,21 @@ class _NotesViewState extends State<NotesView> {
       appBar: AppBar(
         title: const Text('Заметки'),
         actions: [
+          BlocBuilder<NotesCubit, NotesState>(
+            builder: (context, state) {
+              final sortByReminder = state is NotesLoaded && state.sortByReminder;
+              return IconButton(
+                icon: Icon(
+                  sortByReminder ? Icons.event : Icons.access_time,
+                  color: AppColors.primary,
+                ),
+                tooltip: sortByReminder ? 'Сортировка: по дате напоминания' : 'Сортировка: по дате создания',
+                onPressed: () {
+                  context.read<NotesCubit>().toggleSort();
+                },
+              );
+            },
+          ),
           IconButton(
             icon: const Icon(Icons.filter_list),
             onPressed: () => _showFilterSheet(context),

@@ -138,199 +138,214 @@ class _DayScreenBottomSheetState extends State<DayScreenBottomSheet> {
       minChildSize: 0.5,
       maxChildSize: 0.95,
       builder: (context, scrollController) {
-        return Container(
-          decoration: const BoxDecoration(
-            color: AppColors.surfaceVariant,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
-          ),
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-          child: _isLoading
-              ? const Center(child: CircularProgressIndicator())
-              : ListView(
-                  controller: scrollController,
-                  children: [
-                    // Handle indicator
-                    Center(
-                      child: Container(
-                        width: 40,
-                        height: 4,
-                        margin: const EdgeInsets.only(bottom: 12),
-                        decoration: BoxDecoration(
-                          color: Colors.grey[600],
-                          borderRadius: BorderRadius.circular(2),
+        return Material(
+          color: Colors.transparent,
+          child: Container(
+            decoration: const BoxDecoration(
+              color: AppColors.surfaceVariant,
+              borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+            ),
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+            child: _isLoading
+                ? const Center(child: CircularProgressIndicator())
+                : ListView(
+                    controller: scrollController,
+                    children: [
+                      // Handle indicator
+                      Center(
+                        child: Container(
+                          width: 40,
+                          height: 4,
+                          margin: const EdgeInsets.only(bottom: 12),
+                          decoration: BoxDecoration(
+                            color: Colors.grey[600],
+                            borderRadius: BorderRadius.circular(2),
+                          ),
                         ),
                       ),
-                    ),
 
-                    // Date Header
-                    Text(
-                      AppDateUtils.formatDateFullHeader(widget.date),
-                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
-                            fontWeight: FontWeight.bold,
-                            color: AppColors.textPrimary,
-                          ),
-                    ),
-                    const SizedBox(height: 12),
-
-                    // Daily Review Card
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                const Text(
-                                  'Дневной отзыв',
-                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
-                                ),
-                                if (isToday && !_isEditingReview)
-                                  IconButton(
-                                    icon: const Icon(Icons.edit, size: 20, color: AppColors.primary),
-                                    onPressed: () => setState(() => _isEditingReview = true),
-                                  ),
-                              ],
+                      // Date Header
+                      Text(
+                        AppDateUtils.formatDateFullHeader(widget.date),
+                        style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                              fontWeight: FontWeight.bold,
+                              color: AppColors.textPrimary,
                             ),
-                            if (_isEditingReview) ...[
-                              const SizedBox(height: 8),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // Daily Review Card
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
                               Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Text('Оценка (1-10): $_reviewRating'),
-                                  Expanded(
-                                    child: Slider(
-                                      value: _reviewRating.toDouble(),
-                                      min: 1,
-                                      max: 10,
-                                      divisions: 9,
-                                      activeColor: AppColors.primary,
-                                      onChanged: (val) =>
-                                          setState(() => _reviewRating = val.round()),
-                                    ),
+                                  const Text(
+                                    'Дневной отзыв',
+                                    style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16),
                                   ),
+                                  if (isToday && !_isEditingReview)
+                                    IconButton(
+                                      icon: const Icon(Icons.edit, size: 20, color: AppColors.primary),
+                                      onPressed: () => setState(() => _isEditingReview = true),
+                                    ),
                                 ],
                               ),
-                              TextField(
-                                controller: _reviewController,
-                                maxLines: 2,
-                                decoration: const InputDecoration(
-                                  hintText: 'Как прошёл ваш день?',
+                              if (_isEditingReview) ...[
+                                const SizedBox(height: 8),
+                                Row(
+                                  children: [
+                                    Text('Оценка (1-10): $_reviewRating'),
+                                    Expanded(
+                                      child: Slider(
+                                        value: _reviewRating.toDouble(),
+                                        min: 1,
+                                        max: 10,
+                                        divisions: 9,
+                                        activeColor: AppColors.primary,
+                                        onChanged: (val) =>
+                                            setState(() => _reviewRating = val.round()),
+                                      ),
+                                    ),
+                                  ],
                                 ),
+                                TextField(
+                                  controller: _reviewController,
+                                  maxLines: 2,
+                                  decoration: const InputDecoration(
+                                    hintText: 'Как прошёл ваш день?',
+                                  ),
+                                ),
+                                const SizedBox(height: 8),
+                                Align(
+                                  alignment: Alignment.centerRight,
+                                  child: ElevatedButton(
+                                    onPressed: _saveReview,
+                                    style: ElevatedButton.styleFrom(
+                                      backgroundColor: AppColors.primary,
+                                      foregroundColor: Colors.black,
+                                    ),
+                                    child: const Text('Сохранить'),
+                                  ),
+                                ),
+                              ] else ...[
+                                const SizedBox(height: 4),
+                                if (_review != null) ...[
+                                  Text('Рейтинг: ${_review!.rating} / 10',
+                                      style: const TextStyle(color: AppColors.primary)),
+                                  const SizedBox(height: 4),
+                                  Text(_review!.description,
+                                      style: const TextStyle(color: AppColors.textSecondary)),
+                                ] else
+                                  const Text('Отзыв за этот день отсутствует.',
+                                      style: TextStyle(color: AppColors.textSecondary)),
+                              ],
+                            ],
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+
+                      // Completion progress bar
+                      Card(
+                        child: Padding(
+                          padding: const EdgeInsets.all(12),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                'Выполнено задач и привычек: ${completionPct.toStringAsFixed(0)}%',
+                                style: const TextStyle(fontWeight: FontWeight.bold),
                               ),
                               const SizedBox(height: 8),
-                              Align(
-                                alignment: Alignment.centerRight,
-                                child: ElevatedButton(
-                                  onPressed: _saveReview,
-                                  style: ElevatedButton.styleFrom(
-                                    backgroundColor: AppColors.primary,
-                                    foregroundColor: Colors.black,
-                                  ),
-                                  child: const Text('Сохранить'),
-                                ),
+                              LinearProgressIndicator(
+                                value: completionPct / 100,
+                                backgroundColor: Colors.grey[800],
+                                color: AppColors.primary,
+                                minHeight: 8,
+                                borderRadius: BorderRadius.circular(4),
                               ),
-                            ] else ...[
-                              const SizedBox(height: 4),
-                              if (_review != null) ...[
-                                Text('Рейтинг: ${_review!.rating} / 10',
-                                    style: const TextStyle(color: AppColors.primary)),
-                                const SizedBox(height: 4),
-                                Text(_review!.description,
-                                    style: const TextStyle(color: AppColors.textSecondary)),
-                              ] else
-                                const Text('Отзыв за этот день отсутствует.',
-                                    style: TextStyle(color: AppColors.textSecondary)),
                             ],
-                          ],
+                          ),
                         ),
                       ),
-                    ),
-                    const SizedBox(height: 16),
+                      const SizedBox(height: 16),
 
-                    // Completion progress bar
-                    Card(
-                      child: Padding(
-                        padding: const EdgeInsets.all(12),
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              'Выполнено задач и привычек: ${completionPct.toStringAsFixed(0)}%',
-                              style: const TextStyle(fontWeight: FontWeight.bold),
-                            ),
-                            const SizedBox(height: 8),
-                            LinearProgressIndicator(
-                              value: completionPct / 100,
-                              backgroundColor: Colors.grey[800],
-                              color: AppColors.primary,
-                              minHeight: 8,
-                              borderRadius: BorderRadius.circular(4),
-                            ),
-                          ],
-                        ),
-                      ),
-                    ),
-                    const SizedBox(height: 16),
+                      // Tasks Section
+                      const Text('Задачи',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      if (_tasks.isEmpty)
+                        const Text('Задач на эту дату не было.',
+                            style: TextStyle(color: AppColors.textSecondary))
+                      else
+                        ..._tasks.map((task) => CheckboxListTile(
+                              title: Text(task.title,
+                                  style: TextStyle(
+                                    decoration: task.isCompleted
+                                        ? TextDecoration.lineThrough
+                                        : null,
+                                  )),
+                              subtitle: task.description != null ? Text(task.description!) : null,
+                              value: task.isCompleted,
+                              activeColor: AppColors.primary,
+                              checkColor: Colors.transparent,
+                              onChanged: (val) async {
+                                if (widget.date.isBefore(AppDateUtils.normalizeDate(AppDateUtils.today))) {
+                                  ScaffoldMessenger.of(context).showSnackBar(
+                                    const SnackBar(content: Text('Нельзя изменять задачи и привычки за прошлые дни')),
+                                  );
+                                  return;
+                                }
+                                await _tasksRepo.toggleTaskCompletion(task.id, val ?? false);
+                                _loadData();
+                              },
+                            )),
+                      const SizedBox(height: 16),
 
-                    // Tasks Section
-                    const Text('Задачи',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    if (_tasks.isEmpty)
-                      const Text('Задач на эту дату не было.',
-                          style: TextStyle(color: AppColors.textSecondary))
-                    else
-                      ..._tasks.map((task) => CheckboxListTile(
-                            title: Text(task.title,
+                      // Habits Section
+                      const Text('Привычки',
+                          style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                      const SizedBox(height: 8),
+                      if (_activeHabits.isEmpty)
+                        const Text('Активных привычек на эту дату не было.',
+                            style: TextStyle(color: AppColors.textSecondary))
+                      else
+                        ..._activeHabits.map((habit) {
+                          final isCompleted = _habitCompletions[habit.id] ?? false;
+                          return CheckboxListTile(
+                            title: Text(habit.title,
                                 style: TextStyle(
-                                  decoration: task.isCompleted
-                                      ? TextDecoration.lineThrough
-                                      : null,
+                                  decoration: isCompleted ? TextDecoration.lineThrough : null,
                                 )),
-                            subtitle: task.description != null ? Text(task.description!) : null,
-                            value: task.isCompleted,
+                            subtitle:
+                                habit.description != null ? Text(habit.description!) : null,
+                            value: isCompleted,
                             activeColor: AppColors.primary,
-                            checkColor: Colors.black,
+                            checkColor: Colors.transparent,
                             onChanged: (val) async {
-                              await _tasksRepo.toggleTaskCompletion(task.id, val ?? false);
+                              if (widget.date.isBefore(AppDateUtils.normalizeDate(AppDateUtils.today))) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(content: Text('Нельзя изменять задачи и привычки за прошлые дни')),
+                                );
+                                return;
+                              }
+                              await _habitsRepo.toggleHabitCompletion(
+                                habit.id,
+                                widget.date,
+                                val ?? false,
+                              );
                               _loadData();
                             },
-                          )),
-                    const SizedBox(height: 16),
-
-                    // Habits Section
-                    const Text('Привычки',
-                        style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                    const SizedBox(height: 8),
-                    if (_activeHabits.isEmpty)
-                      const Text('Активных привычек на эту дату не было.',
-                          style: TextStyle(color: AppColors.textSecondary))
-                    else
-                      ..._activeHabits.map((habit) {
-                        final isCompleted = _habitCompletions[habit.id] ?? false;
-                        return CheckboxListTile(
-                          title: Text(habit.title,
-                              style: TextStyle(
-                                decoration: isCompleted ? TextDecoration.lineThrough : null,
-                              )),
-                          subtitle:
-                              habit.description != null ? Text(habit.description!) : null,
-                          value: isCompleted,
-                          activeColor: AppColors.primary,
-                          checkColor: Colors.black,
-                          onChanged: (val) async {
-                            await _habitsRepo.toggleHabitCompletion(
-                              habit.id,
-                              widget.date,
-                              val ?? false,
-                            );
-                            _loadData();
-                          },
-                        );
-                      }),
-                  ],
-                ),
+                          );
+                        }),
+                    ],
+                  ),
+          ),
         );
       },
     );

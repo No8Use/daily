@@ -7,16 +7,27 @@ class NotesRepository {
 
   NotesRepository(this.db);
 
-  /// Streams notes with optional filtering options.
+  /// Streams notes with optional filtering and sorting options.
   Stream<List<Note>> watchNotes({
     DateTime? createdAfter,
     DateTime? createdBefore,
     bool? hasNeedCheckDate,
     DateTime? checkAfter,
     DateTime? checkBefore,
+    bool sortByReminder = false,
   }) {
-    final query = db.select(db.notes)
-      ..orderBy([(tbl) => OrderingTerm.desc(tbl.createdAt)]);
+    final query = db.select(db.notes);
+
+    if (sortByReminder) {
+      query.orderBy([
+        (tbl) => OrderingTerm.desc(tbl.needCheckDate),
+        (tbl) => OrderingTerm.desc(tbl.createdAt),
+      ]);
+    } else {
+      query.orderBy([
+        (tbl) => OrderingTerm.desc(tbl.createdAt),
+      ]);
+    }
 
     if (createdAfter != null) {
       final normAfter = AppDateUtils.normalizeDate(createdAfter);

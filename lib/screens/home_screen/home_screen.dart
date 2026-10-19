@@ -19,28 +19,49 @@ import 'package:daily/utils/service_locator.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
-class HomeScreen extends StatelessWidget {
+class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  late final HeatmapCubit _heatmapCubit;
+  late final TasksCubit _tasksCubit;
+  late final HabitsCubit _habitsCubit;
+  late final NotesCubit _notesCubit;
+  late final ReviewsCubit _reviewsCubit;
+
+  @override
+  void initState() {
+    super.initState();
+    _heatmapCubit = getIt<HeatmapCubit>()..loadHeatmapData();
+    _tasksCubit = getIt<TasksCubit>()..loadTasksForDate(AppDateUtils.today);
+    _habitsCubit = getIt<HabitsCubit>()..loadHabits();
+    _notesCubit = getIt<NotesCubit>()..loadNotes();
+    _reviewsCubit = getIt<ReviewsCubit>()..loadReviewForDate(AppDateUtils.today);
+  }
+
+  @override
+  void dispose() {
+    _heatmapCubit.close();
+    _tasksCubit.close();
+    _habitsCubit.close();
+    _notesCubit.close();
+    _reviewsCubit.close();
+    super.dispose();
+  }
 
   @override
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<HeatmapCubit>(
-          create: (_) => getIt<HeatmapCubit>()..loadHeatmapData(),
-        ),
-        BlocProvider<TasksCubit>(
-          create: (_) => getIt<TasksCubit>()..loadTasksForDate(AppDateUtils.today),
-        ),
-        BlocProvider<HabitsCubit>(
-          create: (_) => getIt<HabitsCubit>()..loadHabits(),
-        ),
-        BlocProvider<NotesCubit>(
-          create: (_) => getIt<NotesCubit>()..loadNotes(),
-        ),
-        BlocProvider<ReviewsCubit>(
-          create: (_) => getIt<ReviewsCubit>()..loadReviewForDate(AppDateUtils.today),
-        ),
+        BlocProvider<HeatmapCubit>.value(value: _heatmapCubit),
+        BlocProvider<TasksCubit>.value(value: _tasksCubit),
+        BlocProvider<HabitsCubit>.value(value: _habitsCubit),
+        BlocProvider<NotesCubit>.value(value: _notesCubit),
+        BlocProvider<ReviewsCubit>.value(value: _reviewsCubit),
       ],
       child: const HomeView(),
     );
@@ -62,16 +83,19 @@ class _HomeViewState extends State<HomeView> {
   bool _isEditingReview = false;
   late TextEditingController _reviewDescController;
   int _reviewRating = 5;
+  late final ScrollController _heatmapScrollController;
 
   @override
   void initState() {
     super.initState();
     _reviewDescController = TextEditingController();
+    _heatmapScrollController = ScrollController();
   }
 
   @override
   void dispose() {
     _reviewDescController.dispose();
+    _heatmapScrollController.dispose();
     super.dispose();
   }
 
@@ -163,41 +187,49 @@ class _HomeViewState extends State<HomeView> {
           builder: (context, setDialogState) {
             return AlertDialog(
               title: const Text('Новая задача на сегодня'),
-              content: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  TextField(
-                    controller: titleController,
-                    autofocus: true,
-                    decoration: const InputDecoration(labelText: 'Название задачи'),
-                  ),
-                  const SizedBox(height: 12),
-                  TextField(
-                    controller: descController,
-                    decoration: const InputDecoration(labelText: 'Описание (опционально)'),
-                  ),
-                  const SizedBox(height: 12),
-                  Row(
-                    children: [
-                      Text('Дата выполнения: ${AppDateUtils.formatDateDisplay(selectedDueDate)}'),
-                      const Spacer(),
-                      IconButton(
-                        icon: const Icon(Icons.calendar_month, color: AppColors.primary),
-                        onPressed: () async {
-                          final picked = await showDatePicker(
-                            context: context,
-                            initialDate: selectedDueDate,
-                            firstDate: DateTime(2020),
-                            lastDate: DateTime.now().add(const Duration(days: 365)),
-                          );
-                          if (picked != null) {
-                            setDialogState(() => selectedDueDate = picked);
-                          }
-                        },
-                      ),
-                    ],
-                  ),
-                ],
+              content: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: titleController,
+                      autofocus: true,
+                      decoration: const InputDecoration(labelText: 'Название задачи'),
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: descController,
+                      minLines: 1,
+                      maxLines: 3,
+                      decoration: const InputDecoration(labelText: 'Описание (опционально)'),
+                    ),
+                    const SizedBox(height: 12),
+                    Row(
+                      children: [
+                        Expanded(
+                          child: Text(
+                            'Дата: ${AppDateUtils.formatDateDisplay(selectedDueDate)}',
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.calendar_month, color: AppColors.primary),
+                          onPressed: () async {
+                            final picked = await showDatePicker(
+                              context: context,
+                              initialDate: selectedDueDate,
+                              firstDate: DateTime(2020),
+                              lastDate: DateTime.now().add(const Duration(days: 365)),
+                            );
+                            if (picked != null) {
+                              setDialogState(() => selectedDueDate = picked);
+                            }
+                          },
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
               ),
               actions: [
                 TextButton(
@@ -271,7 +303,7 @@ class _HomeViewState extends State<HomeView> {
       body: RefreshIndicator(
         onRefresh: () async => _reloadAllCubits(context),
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: const EdgeInsets.all(8),
           children: [
             // ================= 1. HEATMAP SECTION =================
             BlocBuilder<HeatmapCubit, HeatmapState>(
@@ -279,13 +311,19 @@ class _HomeViewState extends State<HomeView> {
                 if (state is HeatmapLoading) {
                   return const Card(
                     child: Padding(
-                      padding: EdgeInsets.all(32),
+                      padding: EdgeInsets.all(24),
                       child: Center(child: CircularProgressIndicator()),
                     ),
                   );
                 }
 
                 if (state is HeatmapLoaded) {
+                  WidgetsBinding.instance.addPostFrameCallback((_) {
+                    if (_heatmapScrollController.hasClients) {
+                      _heatmapScrollController.jumpTo(_heatmapScrollController.position.maxScrollExtent);
+                    }
+                  });
+
                   return Card(
                     child: Padding(
                       padding: const EdgeInsets.all(12),
@@ -312,6 +350,7 @@ class _HomeViewState extends State<HomeView> {
                           ),
                           const SizedBox(height: 12),
                           SingleChildScrollView(
+                            controller: _heatmapScrollController,
                             scrollDirection: Axis.horizontal,
                             child: ContributionHeatmap(
                               entries: state.entries,
@@ -321,7 +360,7 @@ class _HomeViewState extends State<HomeView> {
                               cellSpacing: 3,
                               cellRadius: 2,
                               heatmapColor: HeatmapColor.green,
-                              weekdayLabel: WeekdayLabel.githubLike,
+                              weekdayLabel: WeekdayLabel.none,
                               onCellTap: (date, value) {
                                 DayScreenBottomSheet.show(context, date);
                               },
@@ -337,7 +376,7 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // ================= 2. TASKS SECTION =================
             BlocBuilder<TasksCubit, TasksState>(
@@ -387,14 +426,13 @@ class _HomeViewState extends State<HomeView> {
                                   subtitle: task.description != null ? Text(task.description!) : null,
                                   value: task.isCompleted,
                                   activeColor: AppColors.primary,
-                                  checkColor: Colors.black,
+                                  checkColor: Colors.transparent,
                                   onChanged: (val) {
                                     context.read<TasksCubit>().toggleTask(task.id, task.isCompleted);
-                                    context.read<HeatmapCubit>().loadHeatmapData();
                                   },
                                 )),
                         ],
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
                       ],
                     ],
                   ),
@@ -402,7 +440,7 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // ================= 3. HABITS SECTION =================
             BlocBuilder<HabitsCubit, HabitsState>(
@@ -461,19 +499,18 @@ class _HomeViewState extends State<HomeView> {
                                 ),
                                 value: isCompleted,
                                 activeColor: AppColors.primary,
-                                checkColor: Colors.black,
+                                checkColor: Colors.transparent,
                                 onChanged: (val) {
                                   context.read<HabitsCubit>().toggleCompletion(
                                         habit.id,
                                         AppDateUtils.today,
-                                        isCompleted,
+                                        val ?? false,
                                       );
-                                  context.read<HeatmapCubit>().loadHeatmapData();
                                 },
                               );
                             }),
                         ],
-                        const SizedBox(height: 8),
+                        const SizedBox(height: 4),
                       ],
                     ],
                   ),
@@ -481,7 +518,7 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // ================= 4. NOTES PREVIEW SECTION =================
             BlocBuilder<NotesCubit, NotesState>(
@@ -496,17 +533,34 @@ class _HomeViewState extends State<HomeView> {
                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
                           children: [
                             const Text('Заметки', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            TextButton(
-                              onPressed: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const NotesScreen()),
-                                );
-                                if (context.mounted) {
-                                  _reloadAllCubits(context);
-                                }
-                              },
-                              child: const Text('Все заметки', style: TextStyle(color: AppColors.primary)),
+                            Row(
+                              children: [
+                                IconButton(
+                                  icon: const Icon(Icons.add_circle, color: AppColors.primary),
+                                  tooltip: 'Быстро создать заметку',
+                                  onPressed: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const NotesScreen()),
+                                    );
+                                    if (context.mounted) {
+                                      _reloadAllCubits(context);
+                                    }
+                                  },
+                                ),
+                                TextButton(
+                                  onPressed: () async {
+                                    await Navigator.push(
+                                      context,
+                                      MaterialPageRoute(builder: (_) => const NotesScreen()),
+                                    );
+                                    if (context.mounted) {
+                                      _reloadAllCubits(context);
+                                    }
+                                  },
+                                  child: const Text('Все заметки', style: TextStyle(color: AppColors.primary)),
+                                ),
+                              ],
                             ),
                           ],
                         ),
@@ -539,7 +593,7 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 16),
+            const SizedBox(height: 8),
 
             // ================= 5. DAILY REVIEW SECTION =================
             BlocBuilder<ReviewsCubit, ReviewsState>(

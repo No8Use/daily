@@ -16,25 +16,35 @@ class NotesCubit extends Cubit<NotesState> {
   bool? _hasNeedCheckDate;
   DateTime? _checkAfter;
   DateTime? _checkBefore;
+  bool _sortByReminder = false;
 
   NotesCubit(this.repository, this.notificationService) : super(NotesInitial());
 
-  /// Loads notes with optional filters.
+  /// Loads notes with optional filters and sorting.
   void loadNotes({
     DateTime? createdAfter,
     DateTime? createdBefore,
     bool? hasNeedCheckDate,
     DateTime? checkAfter,
     DateTime? checkBefore,
+    bool? sortByReminder,
   }) {
-    _createdAfter = createdAfter;
-    _createdBefore = createdBefore;
-    _hasNeedCheckDate = hasNeedCheckDate;
-    _checkAfter = checkAfter;
-    _checkBefore = checkBefore;
+    _createdAfter = createdAfter ?? _createdAfter;
+    _createdBefore = createdBefore ?? _createdBefore;
+    _hasNeedCheckDate = hasNeedCheckDate ?? _hasNeedCheckDate;
+    _checkAfter = checkAfter ?? _checkAfter;
+    _checkBefore = checkBefore ?? _checkBefore;
+    if (sortByReminder != null) {
+      _sortByReminder = sortByReminder;
+    }
 
     emit(NotesLoading());
     _subscribe();
+  }
+
+  void toggleSort() {
+    _sortByReminder = !_sortByReminder;
+    loadNotes();
   }
 
   void _subscribe() {
@@ -49,6 +59,7 @@ class NotesCubit extends Cubit<NotesState> {
         hasNeedCheckDate: _hasNeedCheckDate,
         checkAfter: _checkAfter,
         checkBefore: _checkBefore,
+        sortByReminder: _sortByReminder,
       ).listen((notes) {
         emit(NotesLoaded(
           notes: notes,
@@ -58,6 +69,7 @@ class NotesCubit extends Cubit<NotesState> {
           hasNeedCheckDate: _hasNeedCheckDate,
           checkAfter: _checkAfter,
           checkBefore: _checkBefore,
+          sortByReminder: _sortByReminder,
         ));
       }, onError: (e) {
         emit(NotesError('Ошибка загрузки заметок: $e'));
@@ -68,6 +80,11 @@ class NotesCubit extends Cubit<NotesState> {
   }
 
   void clearFilters() {
+    _createdAfter = null;
+    _createdBefore = null;
+    _hasNeedCheckDate = null;
+    _checkAfter = null;
+    _checkBefore = null;
     loadNotes();
   }
 

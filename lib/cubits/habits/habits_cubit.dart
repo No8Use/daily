@@ -9,25 +9,26 @@ class HabitsCubit extends Cubit<HabitsState> {
   final HabitsRepository repository;
   StreamSubscription? _habitsSub;
   StreamSubscription? _completionsSub;
+  DateTime? _currentDate;
 
   HabitsCubit(this.repository) : super(HabitsInitial());
 
-  /// Initializes streams for habits and today's completions.
-  void loadHabits() {
+  /// Initializes streams for habits and completions for a specific date (defaults to today).
+  void loadHabits([DateTime? date]) {
+    _currentDate = date != null ? AppDateUtils.normalizeDate(date) : AppDateUtils.today;
     emit(HabitsLoading());
-    _subscribe();
+    _subscribe(_currentDate!);
   }
 
-  void _subscribe() {
+  void _subscribe(DateTime targetDate) {
     _habitsSub?.cancel();
     _completionsSub?.cancel();
 
-    final today = AppDateUtils.today;
-
     _habitsSub = repository.watchAllHabits().listen((allHabits) {
+      final activeHabits = allHabits.where((h) => h.canceledAt == null).toList();
+
       _completionsSub?.cancel();
-      _completionsSub = repository.watchCompletionsForDate(today).listen((completions) {
-        final activeHabits = allHabits.where((h) => h.canceledAt == null).toList();
+      _completionsSub = repository.watchCompletionsForDate(targetDate).listen((completions) {
         final completionsMap = <int, bool>{};
         for (final c in completions) {
           completionsMap[c.habitId] = c.isCompleted;
@@ -46,9 +47,10 @@ class HabitsCubit extends Cubit<HabitsState> {
     });
   }
 
-  Future<void> toggleCompletion(int habitId, DateTime date, bool currentCompleted) async {
+  Future<void> toggleCompletion(int habitId, DateTime date, bool isCompleted) async {
     try {
-      await repository.toggleHabitCompletion(habitId, date, !currentCompleted);
+      final normDate = AppDateUtils.normalizeDate(date);
+      await repository.toggleHabitCompletion(habitId, normDate, isCompleted);
     } catch (e) {
       emit(HabitsError('Не удалось обновить статус привычки: $e'));
     }

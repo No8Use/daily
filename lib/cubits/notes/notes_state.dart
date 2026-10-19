@@ -16,12 +16,13 @@ class NotesLoaded extends NotesState {
   final List<Note> notes;
   final List<Note> recentNotes;
 
-  // Filter criteria
+  // Filter and sort criteria
   final DateTime? createdAfter;
   final DateTime? createdBefore;
   final bool? hasNeedCheckDate;
   final DateTime? checkAfter;
   final DateTime? checkBefore;
+  final bool sortByReminder;
 
   const NotesLoaded({
     required this.notes,
@@ -31,6 +32,7 @@ class NotesLoaded extends NotesState {
     this.hasNeedCheckDate,
     this.checkAfter,
     this.checkBefore,
+    this.sortByReminder = false,
   });
 
   NotesLoaded copyWith({
@@ -41,6 +43,7 @@ class NotesLoaded extends NotesState {
     bool? hasNeedCheckDate,
     DateTime? checkAfter,
     DateTime? checkBefore,
+    bool? sortByReminder,
     bool clearFilters = false,
   }) {
     return NotesLoaded(
@@ -51,6 +54,7 @@ class NotesLoaded extends NotesState {
       hasNeedCheckDate: clearFilters ? null : (hasNeedCheckDate ?? this.hasNeedCheckDate),
       checkAfter: clearFilters ? null : (checkAfter ?? this.checkAfter),
       checkBefore: clearFilters ? null : (checkBefore ?? this.checkBefore),
+      sortByReminder: sortByReminder ?? this.sortByReminder,
     );
   }
 
@@ -63,6 +67,7 @@ class NotesLoaded extends NotesState {
         hasNeedCheckDate,
         checkAfter,
         checkBefore,
+        sortByReminder,
       ];
 }
 

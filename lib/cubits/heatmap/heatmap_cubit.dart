@@ -26,7 +26,9 @@ class HeatmapCubit extends Cubit<HeatmapState> {
 
   /// Aggregates habit completions and tasks into ContributionEntry list.
   Future<void> loadHeatmapData() async {
-    emit(HeatmapLoading());
+    if (state is! HeatmapLoaded) {
+      emit(HeatmapLoading());
+    }
     try {
       final countsByDate = <DateTime, int>{};
 
