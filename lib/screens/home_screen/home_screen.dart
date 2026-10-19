@@ -1,4 +1,3 @@
-import 'package:contribution_heatmap/contribution_heatmap.dart';
 import 'package:daily/cubits/habits/habits_cubit.dart';
 import 'package:daily/cubits/habits/habits_state.dart';
 import 'package:daily/cubits/heatmap/heatmap_cubit.dart';
@@ -9,6 +8,8 @@ import 'package:daily/cubits/reviews/reviews_cubit.dart';
 import 'package:daily/cubits/reviews/reviews_state.dart';
 import 'package:daily/cubits/tasks/tasks_cubit.dart';
 import 'package:daily/cubits/tasks/tasks_state.dart';
+import 'package:daily/dialogs/add_task_dialog.dart';
+import 'package:daily/dialogs/import_mode_dialog.dart';
 import 'package:daily/screens/day_screen/day_screen.dart';
 import 'package:daily/screens/habits_screen/habits_screen.dart';
 import 'package:daily/screens/notes_screen/notes_screen.dart';
@@ -16,8 +17,10 @@ import 'package:daily/utils/app_theme.dart';
 import 'package:daily/utils/backup_service.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/service_locator.dart';
+import 'package:daily/widgets/custom_contribution_heatmap.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
+import 'package:daily/utils/backup_service.dart' as utils;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -83,19 +86,16 @@ class _HomeViewState extends State<HomeView> {
   bool _isEditingReview = false;
   late TextEditingController _reviewDescController;
   int _reviewRating = 5;
-  late final ScrollController _heatmapScrollController;
 
   @override
   void initState() {
     super.initState();
     _reviewDescController = TextEditingController();
-    _heatmapScrollController = ScrollController();
   }
 
   @override
   void dispose() {
     _reviewDescController.dispose();
-    _heatmapScrollController.dispose();
     super.dispose();
   }
 
@@ -129,36 +129,13 @@ class _HomeViewState extends State<HomeView> {
 
       if (!context.mounted) return;
 
-      final mode = await showDialog<ImportMode>(
-        context: context,
-        builder: (dialogContext) {
-          return AlertDialog(
-            title: const Text('Режим импорта'),
-            content: const Text(
-              'Выберите способ импорта данных:\n\n'
-              '• Объединить (Merge): добавить/обновить существующие записи.\n'
-              '• Заменить (Replace): полностью очистить базу данных перед импортом.',
-            ),
-            actions: [
-              TextButton(
-                onPressed: () => Navigator.pop(dialogContext, ImportMode.merge),
-                child: const Text('Объединить'),
-              ),
-              ElevatedButton(
-                onPressed: () => Navigator.pop(dialogContext, ImportMode.replace),
-                style: ElevatedButton.styleFrom(
-                  backgroundColor: Colors.red,
-                  foregroundColor: Colors.white,
-                ),
-                child: const Text('Заменить'),
-              ),
-            ],
-          );
-        },
-      );
+      final mode = await ImportModeDialog.show(context);
 
       if (mode != null && context.mounted) {
-        await getIt<BackupService>().importData(backupData, mode);
+        await getIt<BackupService>().importData(
+          backupData,
+          mode == ImportMode.merge ? utils.ImportMode.merge : utils.ImportMode.replace,
+        );
         if (context.mounted) {
           _reloadAllCubits(context);
           ScaffoldMessenger.of(context).showSnackBar(
@@ -173,91 +150,6 @@ class _HomeViewState extends State<HomeView> {
         );
       }
     }
-  }
-
-  void _showAddTaskDialog(BuildContext parentContext) {
-    final titleController = TextEditingController();
-    final descController = TextEditingController();
-    DateTime selectedDueDate = AppDateUtils.today;
-
-    showDialog(
-      context: parentContext,
-      builder: (dialogContext) {
-        return StatefulBuilder(
-          builder: (context, setDialogState) {
-            return AlertDialog(
-              title: const Text('Новая задача на сегодня'),
-              content: SingleChildScrollView(
-                child: Column(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    TextField(
-                      controller: titleController,
-                      autofocus: true,
-                      decoration: const InputDecoration(labelText: 'Название задачи'),
-                    ),
-                    const SizedBox(height: 12),
-                    TextField(
-                      controller: descController,
-                      minLines: 1,
-                      maxLines: 3,
-                      decoration: const InputDecoration(labelText: 'Описание (опционально)'),
-                    ),
-                    const SizedBox(height: 12),
-                    Row(
-                      children: [
-                        Expanded(
-                          child: Text(
-                            'Дата: ${AppDateUtils.formatDateDisplay(selectedDueDate)}',
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        ),
-                        IconButton(
-                          icon: const Icon(Icons.calendar_month, color: AppColors.primary),
-                          onPressed: () async {
-                            final picked = await showDatePicker(
-                              context: context,
-                              initialDate: selectedDueDate,
-                              firstDate: DateTime(2020),
-                              lastDate: DateTime.now().add(const Duration(days: 365)),
-                            );
-                            if (picked != null) {
-                              setDialogState(() => selectedDueDate = picked);
-                            }
-                          },
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
-              ),
-              actions: [
-                TextButton(
-                  onPressed: () => Navigator.pop(dialogContext),
-                  child: const Text('Отмена'),
-                ),
-                ElevatedButton(
-                  onPressed: () {
-                    final title = titleController.text.trim();
-                    final desc = descController.text.trim().isEmpty ? null : descController.text.trim();
-                    if (title.isNotEmpty) {
-                      parentContext.read<TasksCubit>().createTask(title, desc, selectedDueDate);
-                      parentContext.read<HeatmapCubit>().loadHeatmapData();
-                      Navigator.pop(dialogContext);
-                    }
-                  },
-                  style: ElevatedButton.styleFrom(
-                    backgroundColor: AppColors.primary,
-                    foregroundColor: Colors.black,
-                  ),
-                  child: const Text('Создать'),
-                ),
-              ],
-            );
-          },
-        );
-      },
-    );
   }
 
   @override
@@ -303,7 +195,7 @@ class _HomeViewState extends State<HomeView> {
       body: RefreshIndicator(
         onRefresh: () async => _reloadAllCubits(context),
         child: ListView(
-          padding: const EdgeInsets.all(8),
+          padding: const EdgeInsets.all(4),
           children: [
             // ================= 1. HEATMAP SECTION =================
             BlocBuilder<HeatmapCubit, HeatmapState>(
@@ -318,56 +210,70 @@ class _HomeViewState extends State<HomeView> {
                 }
 
                 if (state is HeatmapLoaded) {
-                  WidgetsBinding.instance.addPostFrameCallback((_) {
-                    if (_heatmapScrollController.hasClients) {
-                      _heatmapScrollController.jumpTo(_heatmapScrollController.position.maxScrollExtent);
-                    }
-                  });
-
                   return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(12),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Center(
-                            child: SegmentedButton<HeatmapMode>(
-                              segments: const [
-                                ButtonSegment(
-                                  value: HeatmapMode.habitsOnly,
-                                  label: Text('Только привычки'),
+                    clipBehavior: Clip.antiAlias,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        SizedBox(
+                          width: double.infinity,
+                          child: SegmentedButton<HeatmapMode>(
+                            showSelectedIcon: false,
+                            style: ButtonStyle(
+                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+                              visualDensity: VisualDensity.compact,
+                              side: WidgetStateProperty.all(BorderSide.none),
+                              shape: WidgetStateProperty.all(
+                                const RoundedRectangleBorder(
+                                  borderRadius: BorderRadius.only(
+                                    topLeft: Radius.circular(12),
+                                    topRight: Radius.circular(12),
+                                  ),
                                 ),
-                                ButtonSegment(
-                                  value: HeatmapMode.allTasks,
-                                  label: Text('Все задачи'),
-                                ),
-                              ],
-                              selected: {state.mode},
-                              onSelectionChanged: (newSelection) {
-                                context.read<HeatmapCubit>().setMode(newSelection.first);
-                              },
+                              ),
+                              backgroundColor: WidgetStateProperty.resolveWith((states) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return AppColors.primary;
+                                }
+                                return AppColors.surfaceVariant;
+                              }),
+                              foregroundColor: WidgetStateProperty.resolveWith((states) {
+                                if (states.contains(WidgetState.selected)) {
+                                  return Colors.black;
+                                }
+                                return AppColors.textPrimary;
+                              }),
                             ),
+                            segments: const [
+                              ButtonSegment(
+                                value: HeatmapMode.habitsOnly,
+                                label: Text('Только привычки', overflow: TextOverflow.ellipsis),
+                              ),
+                              ButtonSegment(
+                                value: HeatmapMode.allTasks,
+                                label: Text('Все задачи', overflow: TextOverflow.ellipsis),
+                              ),
+                            ],
+                            selected: {state.mode},
+                            onSelectionChanged: (newSelection) {
+                              context.read<HeatmapCubit>().setMode(newSelection.first);
+                            },
                           ),
-                          const SizedBox(height: 12),
-                          SingleChildScrollView(
-                            controller: _heatmapScrollController,
-                            scrollDirection: Axis.horizontal,
-                            child: ContributionHeatmap(
-                              entries: state.entries,
-                              minDate: state.minDate,
-                              maxDate: state.maxDate,
-                              cellSize: 12,
-                              cellSpacing: 3,
-                              cellRadius: 2,
-                              heatmapColor: HeatmapColor.green,
-                              weekdayLabel: WeekdayLabel.none,
-                              onCellTap: (date, value) {
-                                DayScreenBottomSheet.show(context, date);
-                              },
-                            ),
+                        ),
+                        Padding(
+                          padding: const EdgeInsets.all(6),
+                          child: CustomContributionHeatmap(
+                            dayDataMap: state.dayDataMap,
+                            minDate: state.minDate,
+                            maxDate: state.maxDate,
+                            today: state.today,
+                            onCellTap: (date) {
+                              DayScreenBottomSheet.show(context, date);
+                            },
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     ),
                   );
                 }
@@ -376,7 +282,7 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 0),
 
             // ================= 2. TASKS SECTION =================
             BlocBuilder<TasksCubit, TasksState>(
@@ -392,7 +298,7 @@ class _HomeViewState extends State<HomeView> {
                             const Spacer(),
                             IconButton(
                               icon: const Icon(Icons.add_circle, color: AppColors.primary),
-                              onPressed: () => _showAddTaskDialog(context),
+                              onPressed: () => AddTaskDialog.show(context),
                             ),
                             IconButton(
                               icon: Icon(_isTasksExpanded ? Icons.expand_less : Icons.expand_more),
@@ -432,7 +338,6 @@ class _HomeViewState extends State<HomeView> {
                                   },
                                 )),
                         ],
-                        const SizedBox(height: 4),
                       ],
                     ],
                   ),
@@ -440,7 +345,7 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 0),
 
             // ================= 3. HABITS SECTION =================
             BlocBuilder<HabitsCubit, HabitsState>(
@@ -510,7 +415,6 @@ class _HomeViewState extends State<HomeView> {
                               );
                             }),
                         ],
-                        const SizedBox(height: 4),
                       ],
                     ],
                   ),
@@ -518,7 +422,7 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 0),
 
             // ================= 4. NOTES PREVIEW SECTION =================
             BlocBuilder<NotesCubit, NotesState>(
@@ -593,7 +497,7 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 8),
+            const SizedBox(height: 0),
 
             // ================= 5. DAILY REVIEW SECTION =================
             BlocBuilder<ReviewsCubit, ReviewsState>(
@@ -636,7 +540,9 @@ class _HomeViewState extends State<HomeView> {
                                 hintText: 'Опишите, как прошёл ваш день...',
                               ),
                             ),
-                            const SizedBox(height: 12),
+                          ],
+                          const SizedBox(height: 12),
+                          if (showEditor)
                             SizedBox(
                               width: double.infinity,
                               child: ElevatedButton(
@@ -655,33 +561,30 @@ class _HomeViewState extends State<HomeView> {
                                 ),
                                 child: const Text('Сохранить отзыв'),
                               ),
-                            ),
-                          ] else ...[
+                            )
+                          else ...[
                             Row(
                               mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text('Оценка: ${review.rating} / 10',
-                                    style: const TextStyle(
-                                        fontSize: 16,
-                                        fontWeight: FontWeight.bold,
-                                        color: AppColors.primary)),
-                                if (state.isEditable)
-                                  TextButton.icon(
-                                    icon: const Icon(Icons.edit, size: 16, color: AppColors.primary),
-                                    label: const Text('Редактировать', style: TextStyle(color: AppColors.primary)),
-                                    onPressed: () {
-                                      setState(() {
-                                        _reviewRating = review.rating;
-                                        _reviewDescController.text = review.description;
-                                        _isEditingReview = true;
-                                      });
-                                    },
-                                  ),
+                                Text('Оценка: ${review?.rating ?? 5} / 10',
+                                    style: const TextStyle(fontWeight: FontWeight.bold)),
+                                TextButton.icon(
+                                  icon: const Icon(Icons.edit, size: 16),
+                                  label: const Text('Редактировать'),
+                                  onPressed: () {
+                                    setState(() {
+                                      _reviewRating = review?.rating ?? 5;
+                                      _reviewDescController.text = review?.description ?? '';
+                                      _isEditingReview = true;
+                                    });
+                                  },
+                                ),
                               ],
                             ),
-                            const SizedBox(height: 8),
-                            Text(review.description,
-                                style: const TextStyle(color: AppColors.textPrimary)),
+                            if (review?.description != null && review!.description.isNotEmpty) ...[
+                              const SizedBox(height: 8),
+                              Text(review.description),
+                            ],
                           ],
                         ],
                       ),
