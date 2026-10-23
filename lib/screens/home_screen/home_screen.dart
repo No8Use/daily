@@ -360,7 +360,7 @@ class _HomeViewState extends State<HomeView> {
                                 style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
                             const Spacer(),
                             IconButton(
-                              icon: const Icon(Icons.add_circle, color: AppColors.primary),
+                              icon: const Icon(Icons.edit, color: AppColors.primary),
                               onPressed: () async {
                                 await Navigator.push(
                                   context,

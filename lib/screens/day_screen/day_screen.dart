@@ -5,6 +5,7 @@ import 'package:daily/data/repositories/tasks_repository.dart';
 import 'package:daily/utils/app_theme.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/service_locator.dart';
+import 'package:daily/widgets/task_card.dart';
 import 'package:flutter/material.dart';
 
 class DayScreenBottomSheet extends StatefulWidget {
@@ -45,7 +46,7 @@ class _DayScreenBottomSheetState extends State<DayScreenBottomSheet> {
   void initState() {
     super.initState();
     _reviewController = TextEditingController();
-    _loadData();
+    _loadData(showLoading: true);
   }
 
   @override
@@ -54,34 +55,45 @@ class _DayScreenBottomSheetState extends State<DayScreenBottomSheet> {
     super.dispose();
   }
 
-  Future<void> _loadData() async {
-    setState(() => _isLoading = true);
-
-    final review = await _reviewsRepo.getReviewForDate(widget.date);
-    final tasks = await _tasksRepo.getTasksForDate(widget.date);
-    final allHabits = await _habitsRepo.watchAllHabits().first;
-    final completions = await _habitsRepo.getCompletionsForDate(widget.date);
-
-    // Active habits on widget.date: created <= date && (canceledAt == null || canceledAt > date)
-    final activeOnDate = allHabits.where((h) {
-      final isCreated = AppDateUtils.normalizeDate(h.createdAt).isBefore(widget.date) ||
-          AppDateUtils.isSameDay(h.createdAt, widget.date);
-      final isNotCanceled = h.canceledAt == null ||
-          AppDateUtils.normalizeDate(h.canceledAt!).isAfter(widget.date);
-      return isCreated && isNotCanceled;
-    }).toList();
-
-    final completionsMap = <int, bool>{};
-    for (final c in completions) {
-      completionsMap[c.habitId] = c.isCompleted;
+  Future<void> _loadData({bool showLoading = false}) async {
+    if (showLoading && mounted) {
+      setState(() => _isLoading = true);
     }
 
-    if (review != null) {
-      _reviewController.text = review.description;
-      _reviewRating = review.rating;
-    }
+    try {
+      final review = await _reviewsRepo.getReviewForDate(widget.date);
+      final tasks = await _tasksRepo.getTasksForDate(widget.date);
+      final allHabits = await _habitsRepo.watchAllHabits().first;
+      final completions = await _habitsRepo.getCompletionsForDate(widget.date);
 
-    if (mounted) {
+      final targetDate = AppDateUtils.normalizeDate(widget.date);
+
+      final activeOnDate = allHabits.where((habit) {
+        final createdDate = AppDateUtils.normalizeDate(habit.createdAt);
+        final isCreated = !createdDate.isAfter(targetDate);
+
+        final canceledDate = habit.canceledAt == null
+            ? null
+            : AppDateUtils.normalizeDate(habit.canceledAt!);
+
+        final isNotCanceled =
+            canceledDate == null || canceledDate.isAfter(targetDate);
+
+        return isCreated && isNotCanceled;
+      }).toList();
+
+      final completionsMap = <int, bool>{
+        for (final completion in completions)
+          completion.habitId: completion.isCompleted,
+      };
+
+      if (review != null) {
+        _reviewController.text = review.description;
+        _reviewRating = review.rating;
+      }
+
+      if (!mounted) return;
+
       setState(() {
         _review = review;
         _tasks = tasks;
@@ -89,6 +101,20 @@ class _DayScreenBottomSheetState extends State<DayScreenBottomSheet> {
         _habitCompletions = completionsMap;
         _isLoading = false;
       });
+    } catch (error) {
+      if (!mounted) return;
+
+      setState(() => _isLoading = false);
+
+      ScaffoldMessenger.of(context)
+        ..hideCurrentSnackBar()
+        ..showSnackBar(
+          SnackBar(
+            content: const Text('Не удалось загрузить данные дня.'),
+            behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.surfaceVariant,
+          ),
+        );
     }
   }
 
@@ -176,6 +202,7 @@ class _DayScreenBottomSheetState extends State<DayScreenBottomSheet> {
 
                       // Daily Review Card
                       Card(
+                        margin: .symmetric(vertical: 2),
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
@@ -248,10 +275,10 @@ class _DayScreenBottomSheetState extends State<DayScreenBottomSheet> {
                           ),
                         ),
                       ),
-                      const SizedBox(height: 16),
 
                       // Completion progress bar
                       Card(
+                        margin: .symmetric(vertical: 2),
                         child: Padding(
                           padding: const EdgeInsets.all(12),
                           child: Column(
@@ -283,28 +310,27 @@ class _DayScreenBottomSheetState extends State<DayScreenBottomSheet> {
                         const Text('Задач на эту дату не было.',
                             style: TextStyle(color: AppColors.textSecondary))
                       else
-                        ..._tasks.map((task) => CheckboxListTile(
-                              title: Text(task.title,
-                                  style: TextStyle(
-                                    decoration: task.isCompleted
-                                        ? TextDecoration.lineThrough
-                                        : null,
-                                  )),
-                              subtitle: task.description != null ? Text(task.description!) : null,
-                              value: task.isCompleted,
-                              activeColor: AppColors.primary,
-                              checkColor: Colors.transparent,
-                              onChanged: (val) async {
-                                if (widget.date.isBefore(AppDateUtils.normalizeDate(AppDateUtils.today))) {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text('Нельзя изменять задачи и привычки за прошлые дни')),
-                                  );
-                                  return;
-                                }
-                                await _tasksRepo.toggleTaskCompletion(task.id, val ?? false);
-                                _loadData();
-                              },
-                            )),
+                        ..._tasks.map((task) => TaskCard(
+                          key: ValueKey('task-${task.id}'),
+                          task: task,
+                          date: widget.date,
+                          onLockedTap: () {
+                            print("LALALALA");
+                          },
+                          onChanged: (isCompleted) async {
+                            final success = await _tasksRepo.toggleTaskCompletion(
+                              task.id,
+                              isCompleted,
+                            );
+
+                            if (!success) {
+                              throw StateError('Failed to update task completion.');
+                            }
+                          },
+                          onEdit: () => {
+                            print("Want to edit task")
+                          },
+                        ),),
                       const SizedBox(height: 16),
 
                       // Habits Section
