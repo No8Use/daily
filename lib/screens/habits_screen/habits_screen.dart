@@ -1,6 +1,7 @@
 import 'package:daily/cubits/habits/habits_cubit.dart';
 import 'package:daily/cubits/habits/habits_state.dart';
 import 'package:daily/data/database/app_database.dart';
+import 'package:daily/dialogs/add_edit_habit_dialog.dart';
 import 'package:daily/utils/app_theme.dart';
 import 'package:daily/utils/service_locator.dart';
 import 'package:flutter/material.dart';
@@ -20,63 +21,7 @@ class HabitsScreen extends StatelessWidget {
 
 class HabitsView extends StatelessWidget {
   const HabitsView({super.key});
-
-  void _showAddEditDialog(BuildContext context, {Habit? habit}) {
-    final titleController = TextEditingController(text: habit?.title ?? '');
-    final descController = TextEditingController(text: habit?.description ?? '');
-
-    showDialog(
-      context: context,
-      builder: (dialogContext) {
-        return AlertDialog(
-          title: Text(habit == null ? 'Создать привычку' : 'Редактировать привычку'),
-          content: Column(
-            mainAxisSize: MainAxisSize.min,
-            children: [
-              TextField(
-                controller: titleController,
-                autofocus: true,
-                decoration: const InputDecoration(labelText: 'Название'),
-              ),
-              const SizedBox(height: 12),
-              TextField(
-                controller: descController,
-                decoration: const InputDecoration(labelText: 'Описание (опционально)'),
-              ),
-            ],
-          ),
-          actions: [
-            TextButton(
-              onPressed: () => Navigator.pop(dialogContext),
-              child: const Text('Отмена'),
-            ),
-            ElevatedButton(
-              onPressed: () {
-                final title = titleController.text.trim();
-                final desc = descController.text.trim().isEmpty ? null : descController.text.trim();
-
-                if (title.isNotEmpty) {
-                  final cubit = context.read<HabitsCubit>();
-                  if (habit == null) {
-                    cubit.createHabit(title, desc);
-                  } else {
-                    cubit.updateHabit(habit.id, title, desc);
-                  }
-                  Navigator.pop(dialogContext);
-                }
-              },
-              style: ElevatedButton.styleFrom(
-                backgroundColor: AppColors.primary,
-                foregroundColor: Colors.black,
-              ),
-              child: const Text('Сохранить'),
-            ),
-          ],
-        );
-      },
-    );
-  }
-
+  
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -84,7 +29,7 @@ class HabitsView extends StatelessWidget {
         title: const Text('Управление привычками'),
       ),
       floatingActionButton: FloatingActionButton(
-        onPressed: () => _showAddEditDialog(context),
+        onPressed: () => AddEditHabitDialog.show(context),
         child: const Icon(Icons.add),
       ),
       body: BlocConsumer<HabitsCubit, HabitsState>(
@@ -128,7 +73,10 @@ class HabitsView extends StatelessWidget {
                             children: [
                               IconButton(
                                 icon: const Icon(Icons.edit, size: 20),
-                                onPressed: () => _showAddEditDialog(context, habit: habit),
+                                onPressed: () => AddEditHabitDialog.show(
+                                  context,
+                                  habit: habit,
+                                ),
                               ),
                               IconButton(
                                 icon: const Icon(Icons.archive, size: 20, color: Colors.orangeAccent),

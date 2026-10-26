@@ -4,6 +4,7 @@ import 'dart:math' as math;
 import 'package:daily/data/database/app_database.dart';
 import 'package:daily/utils/app_theme.dart';
 import 'package:daily/utils/date_utils.dart';
+import 'package:daily/utils/models/operation_result.dart';
 import 'package:flutter/material.dart';
 
 class TaskCard extends StatefulWidget {
@@ -19,13 +20,13 @@ class TaskCard extends StatefulWidget {
   final Task task;
   final DateTime date;
 
-  /// Persists the new completion state.
-  final Future<void> Function(bool isCompleted) onChanged;
+  /// Receives the previous completion state and returns the operation result.
+  final Future<OperationResult> Function(bool previousStateForToggle) onChanged;
 
   /// Opens the task editor.
   final VoidCallback? onEdit;
 
-  /// Called when a past task is tapped.
+  /// Called when the user taps a task from a past day.
   final VoidCallback? onLockedTap;
 
   @override
@@ -35,17 +36,30 @@ class TaskCard extends StatefulWidget {
 class _TaskCardState extends State<TaskCard>
     with SingleTickerProviderStateMixin {
   late bool _isCompleted;
+
   bool _isSaving = false;
+
+  /// True only while the wave is moving.
   bool _isWaveAnimating = false;
+
+  /// Keeps the completed wave visible after the animation ends.
+  bool _showWave = false;
 
   Offset? _tapPosition;
 
   late final AnimationController _waveController;
   late final Animation<double> _waveAnimation;
 
+  static const double _borderRadius = 14;
+
+  static const Duration _waveDuration = Duration(milliseconds: 520);
+
+  Color get _completedColor =>
+      AppColors.primary.withValues(alpha: 0.18);
+
   bool get _isPastDay {
     final date = AppDateUtils.normalizeDate(widget.date);
-    final today = AppDateUtils.normalizeDate(AppDateUtils.today);
+    final today = AppDateUtils.today;
 
     return date.isBefore(today);
   }
@@ -58,9 +72,7 @@ class _TaskCardState extends State<TaskCard>
   }
 
   Color get _backgroundColor {
-    if (_isCompleted) {
-      return AppColors.primary.withValues(alpha: 0.10);
-    }
+    if (_isCompleted) return _completedColor;
 
     if (_isPastDay) {
       return AppColors.error.withValues(alpha: 0.09);
@@ -77,7 +89,7 @@ class _TaskCardState extends State<TaskCard>
 
     _waveController = AnimationController(
       vsync: this,
-      duration: const Duration(milliseconds: 520),
+      duration: _waveDuration,
     );
 
     _waveAnimation = CurvedAnimation(
@@ -90,7 +102,11 @@ class _TaskCardState extends State<TaskCard>
 
   void _onWaveStatusChanged(AnimationStatus status) {
     if (status == AnimationStatus.completed && mounted) {
-      setState(() => _isWaveAnimating = false);
+      setState(() {
+        _isWaveAnimating = false;
+        // Do not clear _showWave here.
+        // The fully expanded green wave stays on the card.
+      });
     }
   }
 
@@ -101,6 +117,13 @@ class _TaskCardState extends State<TaskCard>
     if (oldWidget.task.isCompleted != widget.task.isCompleted &&
         !_isSaving) {
       _isCompleted = widget.task.isCompleted;
+
+      // A changed model is authoritative. If the task was changed
+      // externally, reset the animation to avoid stale overlays.
+      _showWave = false;
+      _isWaveAnimating = false;
+      _waveController.stop();
+      _waveController.value = 0;
     }
   }
 
@@ -123,7 +146,7 @@ class _TaskCardState extends State<TaskCard>
     final nextValue = !previousValue;
 
     if (nextValue) {
-      // Start the green wave from the actual tap position.
+      // Start a fresh wave from the last recorded tap position.
       _waveController.stop();
       _waveController.value = 0;
 
@@ -131,43 +154,60 @@ class _TaskCardState extends State<TaskCard>
         _isCompleted = true;
         _isSaving = true;
         _isWaveAnimating = true;
+        _showWave = true;
+        _tapPosition ??= const Offset(40, 30);
       });
 
       _waveController.forward();
     } else {
+      // Unchecking a task removes the persistent green overlay.
       _waveController.stop();
+      _waveController.value = 0;
 
       setState(() {
         _isCompleted = false;
         _isSaving = true;
         _isWaveAnimating = false;
+        _showWave = false;
       });
     }
 
-    try {
-      await widget.onChanged(nextValue);
-    } catch (_) {
-      if (!mounted) return;
+    String? errorMessage;
 
+    try {
+      final result = await widget.onChanged(previousValue);
+
+      if (!result.ok) {
+        errorMessage = result.error ?? 'Не удалось сохранить изменение.';
+      }
+    } catch (_) {
+      errorMessage = 'Не удалось сохранить изменение.';
+    }
+
+    if (errorMessage != null && mounted) {
       _waveController.stop();
+      _waveController.value = 0;
 
       setState(() {
         _isCompleted = previousValue;
         _isWaveAnimating = false;
+        _showWave = previousValue;
       });
 
       ScaffoldMessenger.of(context)
         ..hideCurrentSnackBar()
         ..showSnackBar(
-          const SnackBar(
-            content: Text('Не удалось сохранить изменение.'),
+          SnackBar(
+            content: Text(errorMessage!),
             behavior: SnackBarBehavior.floating,
+            backgroundColor: AppColors.surfaceVariant, // todo rework app_hints for showing information flexibility and here show it like AppHints notification in bottom of app
+            showCloseIcon: true,
           ),
         );
-    } finally {
-      if (mounted) {
-        setState(() => _isSaving = false);
-      }
+    }
+
+    if (mounted) {
+      setState(() => _isSaving = false);
     }
   }
 
@@ -188,24 +228,27 @@ class _TaskCardState extends State<TaskCard>
           },
           onTap: _toggle,
           child: AnimatedContainer(
-            duration: const Duration(milliseconds: 260),
+            duration: const Duration(milliseconds: 240),
             curve: Curves.easeInOut,
             decoration: BoxDecoration(
+              // During the wave, keep the original background beneath
+              // it. After completion, use the exact same green as the wave.
               color: _isWaveAnimating
                   ? AppColors.cardBackground
                   : _backgroundColor,
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(_borderRadius),
               border: Border.all(
                 color: accentColor.withValues(alpha: 0.35),
                 width: 1,
               ),
             ),
             child: ClipRRect(
-              borderRadius: BorderRadius.circular(14),
+              borderRadius: BorderRadius.circular(_borderRadius),
               child: Stack(
                 children: [
-                  // Expanding green circle, clipped to the card.
-                  if (_isWaveAnimating && _tapPosition != null)
+                  // This layer remains in the Stack after the animation
+                  // finishes, with progress held at 1.0.
+                  if (_showWave && _tapPosition != null)
                     Positioned.fill(
                       child: AnimatedBuilder(
                         animation: _waveAnimation,
@@ -219,12 +262,12 @@ class _TaskCardState extends State<TaskCard>
                           );
                         },
                         child: ColoredBox(
-                          color: AppColors.primary.withValues(alpha: 0.15),
+                          color: _completedColor,
                         ),
                       ),
                     ),
 
-                  // Card content.
+                  // Main card content.
                   Padding(
                     padding: const EdgeInsets.symmetric(
                       horizontal: 14,
@@ -269,7 +312,6 @@ class _TaskCardState extends State<TaskCard>
                           ),
                         ),
                         const SizedBox(width: 12),
-
                         Expanded(
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
@@ -317,7 +359,7 @@ class _TaskCardState extends State<TaskCard>
                           ),
                         ),
 
-                        // Edit button replaces the redundant right checkbox.
+                        // Edit button is not displayed for past days.
                         if (!_isPastDay && widget.onEdit != null) ...[
                           const SizedBox(width: 4),
                           IconButton(
@@ -362,7 +404,7 @@ class _WaveClipper extends CustomClipper<Path> {
     final dx = math.max(center.dx, size.width - center.dx);
     final dy = math.max(center.dy, size.height - center.dy);
 
-    // Distance from the tap point to the farthest corner.
+    // The radius reaches the farthest corner by progress == 1.
     final maxRadius = math.sqrt(dx * dx + dy * dy);
     final radius = maxRadius * progress;
 

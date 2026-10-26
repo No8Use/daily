@@ -7,17 +7,18 @@ import 'package:daily/cubits/notes/notes_state.dart';
 import 'package:daily/cubits/reviews/reviews_cubit.dart';
 import 'package:daily/cubits/reviews/reviews_state.dart';
 import 'package:daily/cubits/tasks/tasks_cubit.dart';
-import 'package:daily/cubits/tasks/tasks_state.dart';
-import 'package:daily/dialogs/add_task_dialog.dart';
+import 'package:daily/dialogs/add_edit_task_dialog.dart';
 import 'package:daily/dialogs/import_mode_dialog.dart';
 import 'package:daily/screens/day_screen/day_screen.dart';
 import 'package:daily/screens/habits_screen/habits_screen.dart';
 import 'package:daily/screens/notes_screen/notes_screen.dart';
+import 'package:daily/utils/app_hints.dart';
 import 'package:daily/utils/app_theme.dart';
 import 'package:daily/utils/backup_service.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/service_locator.dart';
 import 'package:daily/widgets/custom_contribution_heatmap.dart';
+import 'package:daily/widgets/tasks_list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 import 'package:daily/utils/backup_service.dart' as utils;
@@ -282,70 +283,89 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 0),
-
             // ================= 2. TASKS SECTION =================
-            BlocBuilder<TasksCubit, TasksState>(
-              builder: (context, state) {
-                return Card(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        title: Row(
-                          children: [
-                            const Text('Задачи на сегодня',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.add_circle, color: AppColors.primary),
-                              onPressed: () => AddTaskDialog.show(context),
-                            ),
-                            IconButton(
-                              icon: Icon(_isTasksExpanded ? Icons.expand_less : Icons.expand_more),
-                              onPressed: () {
-                                setState(() => _isTasksExpanded = !_isTasksExpanded);
-                              },
-                            ),
-                          ],
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Row(
+                      children: [
+                        const Text(
+                          'Задачи на сегодня',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      if (_isTasksExpanded) ...[
-                        if (state is TasksLoading)
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(),
-                          )
-                        else if (state is TasksLoaded) ...[
-                          if (state.todayTasks.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Text('На сегодня задач нет.', style: TextStyle(color: AppColors.textSecondary)),
-                            )
-                          else
-                            ...state.todayTasks.map((task) => CheckboxListTile(
-                                  title: Text(
-                                    task.title,
-                                    style: TextStyle(
-                                      decoration: task.isCompleted ? TextDecoration.lineThrough : null,
-                                    ),
-                                  ),
-                                  subtitle: task.description != null ? Text(task.description!) : null,
-                                  value: task.isCompleted,
-                                  activeColor: AppColors.primary,
-                                  checkColor: Colors.transparent,
-                                  onChanged: (val) {
-                                    context.read<TasksCubit>().toggleTask(task.id, task.isCompleted);
-                                  },
-                                )),
-                        ],
-                      ],
-                    ],
-                  ),
-                );
-              },
-            ),
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.add_circle,
+                            color: AppColors.primary,
+                          ),
+                          onPressed: () => AddEditTaskDialog.show(
+                            context,
+                            initialDate: AppDateUtils.today,
+                            onSaved: () async {
+                              if (!context.mounted) return;
 
-            const SizedBox(height: 0),
+                              context.read<TasksCubit>().loadTasksForDate(
+                                AppDateUtils.today,
+                              );
+
+                              await context
+                                  .read<HeatmapCubit>()
+                                  .loadHeatmapData();
+                            },
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            _isTasksExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isTasksExpanded = !_isTasksExpanded;
+                            });
+                          },
+                        ),
+                      ],
+                    ),
+                  ),
+                  if (_isTasksExpanded)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: TasksList(
+                        date: AppDateUtils.today,
+                        heatmapCubit: context.read<HeatmapCubit>(),
+                        onLockedTap: () {
+                          AppHints.showPastDayHint(context);
+                        },
+                        onEditTask: (dialogContext, task) {
+                          AddEditTaskDialog.show(
+                            dialogContext,
+                            task: task,
+                            initialDate: AppDateUtils.today,
+                            onSaved: () async {
+                              if (!dialogContext.mounted) return;
+
+                              dialogContext
+                                  .read<TasksCubit>()
+                                  .loadTasksForDate(AppDateUtils.today);
+
+                              await dialogContext
+                                  .read<HeatmapCubit>()
+                                  .loadHeatmapData();
+                            },
+                          );
+                        },
+                      ),
+                    ),
+                ],
+              ),
+            ),
 
             // ================= 3. HABITS SECTION =================
             BlocBuilder<HabitsCubit, HabitsState>(
@@ -422,8 +442,6 @@ class _HomeViewState extends State<HomeView> {
               },
             ),
 
-            const SizedBox(height: 0),
-
             // ================= 4. NOTES PREVIEW SECTION =================
             BlocBuilder<NotesCubit, NotesState>(
               builder: (context, state) {
@@ -496,8 +514,6 @@ class _HomeViewState extends State<HomeView> {
                 );
               },
             ),
-
-            const SizedBox(height: 0),
 
             // ================= 5. DAILY REVIEW SECTION =================
             BlocBuilder<ReviewsCubit, ReviewsState>(
