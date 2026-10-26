@@ -18,6 +18,7 @@ import 'package:daily/utils/backup_service.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/service_locator.dart';
 import 'package:daily/widgets/custom_contribution_heatmap.dart';
+import 'package:daily/widgets/habits_list.dart';
 import 'package:daily/widgets/tasks_list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -368,78 +369,65 @@ class _HomeViewState extends State<HomeView> {
             ),
 
             // ================= 3. HABITS SECTION =================
-            BlocBuilder<HabitsCubit, HabitsState>(
-              builder: (context, state) {
-                return Card(
-                  child: Column(
-                    children: [
-                      ListTile(
-                        title: Row(
-                          children: [
-                            const Text('Привычки на сегодня',
-                                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            const Spacer(),
-                            IconButton(
-                              icon: const Icon(Icons.edit, color: AppColors.primary),
-                              onPressed: () async {
-                                await Navigator.push(
-                                  context,
-                                  MaterialPageRoute(builder: (_) => const HabitsScreen()),
-                                );
-                                if (context.mounted) {
-                                  _reloadAllCubits(context);
-                                }
-                              },
-                            ),
-                            IconButton(
-                              icon: Icon(_isHabitsExpanded ? Icons.expand_less : Icons.expand_more),
-                              onPressed: () {
-                                setState(() => _isHabitsExpanded = !_isHabitsExpanded);
-                              },
-                            ),
-                          ],
+
+            // ================= 3. HABITS SECTION =================
+            Card(
+              child: Column(
+                children: [
+                  ListTile(
+                    title: Row(
+                      children: [
+                        const Text(
+                          'Привычки на сегодня',
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 16,
+                          ),
                         ),
-                      ),
-                      if (_isHabitsExpanded) ...[
-                        if (state is HabitsLoading)
-                          const Padding(
-                            padding: EdgeInsets.all(16),
-                            child: CircularProgressIndicator(),
-                          )
-                        else if (state is HabitsLoaded) ...[
-                          if (state.activeHabits.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.all(16),
-                              child: Text('Активных привычек нет.', style: TextStyle(color: AppColors.textSecondary)),
-                            )
-                          else
-                            ...state.activeHabits.map((habit) {
-                              final isCompleted = state.todayCompletions[habit.id] ?? false;
-                              return CheckboxListTile(
-                                title: Text(
-                                  habit.title,
-                                  style: TextStyle(
-                                    decoration: isCompleted ? TextDecoration.lineThrough : null,
-                                  ),
-                                ),
-                                value: isCompleted,
-                                activeColor: AppColors.primary,
-                                checkColor: Colors.transparent,
-                                onChanged: (val) {
-                                  context.read<HabitsCubit>().toggleCompletion(
-                                        habit.id,
-                                        AppDateUtils.today,
-                                        val ?? false,
-                                      );
-                                },
-                              );
-                            }),
-                        ],
+                        const Spacer(),
+                        IconButton(
+                          icon: const Icon(
+                            Icons.edit,
+                            color: AppColors.primary,
+                          ),
+                          onPressed: () async {
+                            await Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => const HabitsScreen(),
+                              ),
+                            );
+
+                            if (context.mounted) {
+                              _reloadAllCubits(context);
+                            }
+                          },
+                        ),
+                        IconButton(
+                          icon: Icon(
+                            _isHabitsExpanded
+                                ? Icons.expand_less
+                                : Icons.expand_more,
+                          ),
+                          onPressed: () {
+                            setState(() {
+                              _isHabitsExpanded = !_isHabitsExpanded;
+                            });
+                          },
+                        ),
                       ],
-                    ],
+                    ),
                   ),
-                );
-              },
+                  if (_isHabitsExpanded)
+                    Padding(
+                      padding: const EdgeInsets.all(8.0),
+                      child: HabitsList(
+                        date: AppDateUtils.today,
+                        heatmapCubit: context.read<HeatmapCubit>(),
+                      ),
+                    ),
+                ],
+              ),
             ),
 
             // ================= 4. NOTES PREVIEW SECTION =================

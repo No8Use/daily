@@ -12,6 +12,7 @@ import 'package:daily/utils/app_hints.dart';
 import 'package:daily/utils/app_theme.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/service_locator.dart';
+import 'package:daily/widgets/habits_list.dart';
 import 'package:daily/widgets/task_card.dart';
 import 'package:daily/widgets/tasks_list.dart';
 import 'package:flutter/material.dart';
@@ -476,6 +477,7 @@ class _DayScreenBottomSheetState
 
                 const SizedBox(height: 16),
 
+
                 // Habits
                 const Text(
                   'Привычки',
@@ -486,87 +488,13 @@ class _DayScreenBottomSheetState
                 ),
                 const SizedBox(height: 8),
 
-                BlocBuilder<HabitsCubit, HabitsState>(
-                  builder: (context, state) {
-                    if (state is HabitsError) {
-                      return Text(state.message);
-                    }
-
-                    if (state is! HabitsLoaded) {
-                      return const Center(
-                        child: CircularProgressIndicator(),
-                      );
-                    }
-
-                    final habits = state.activeHabits;
-                    final completions =
-                        state.todayCompletions;
-
-                    if (habits.isEmpty) {
-                      return const Text(
-                        'Активных привычек на эту дату не было.',
-                        style: TextStyle(
-                          color: AppColors.textSecondary,
-                        ),
-                      );
-                    }
-
-                    return Column(
-                      children: habits.map((habit) {
-                        final isCompleted =
-                            completions[habit.id] ?? false;
-
-                        return CheckboxListTile(
-                          title: Text(
-                            habit.title,
-                            style: TextStyle(
-                              decoration: isCompleted
-                                  ? TextDecoration.lineThrough
-                                  : null,
-                            ),
-                          ),
-                          subtitle: habit.description != null
-                              ? Text(habit.description!)
-                              : null,
-                          value: isCompleted,
-                          activeColor: AppColors.primary,
-                          checkColor: Colors.transparent,
-                          onChanged: (value) async {
-                            final targetDate =
-                            AppDateUtils.normalizeDate(
-                              widget.date,
-                            );
-
-                            if (targetDate.isBefore(
-                              AppDateUtils.today,
-                            )) {
-                              ScaffoldMessenger.of(context)
-                                  .showSnackBar(
-                                const SnackBar(
-                                  content: Text(
-                                    'Нельзя изменять задачи и привычки за прошлые дни',
-                                  ),
-                                ),
-                              );
-                              return;
-                            }
-
-                            await context
-                                .read<HabitsCubit>()
-                                .toggleCompletion(
-                              habit.id,
-                              targetDate,
-                              value ?? false,
-                            );
-
-                            await widget.heatmapCubit
-                                .loadHeatmapData();
-                          },
-                        );
-                      }).toList(),
-                    );
-                  },
+                HabitsList(
+                  date: widget.date,
+                  heatmapCubit: widget.heatmapCubit,
                 ),
+
+                const SizedBox(height: 16),
+
               ],
             ),
           ),

@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:daily/cubits/habits/habits_state.dart';
 import 'package:daily/data/repositories/habits_repository.dart';
 import 'package:daily/utils/date_utils.dart';
+import 'package:daily/utils/models/operation_result.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class HabitsCubit extends Cubit<HabitsState> {
@@ -47,12 +48,26 @@ class HabitsCubit extends Cubit<HabitsState> {
     });
   }
 
-  Future<void> toggleCompletion(int habitId, DateTime date, bool isCompleted) async {
+  Future<OperationResult> toggleCompletion(
+      int habitId,
+      DateTime date,
+      bool isCompleted,
+      ) async {
     try {
-      final normDate = AppDateUtils.normalizeDate(date);
-      await repository.toggleHabitCompletion(habitId, normDate, isCompleted);
-    } catch (e) {
-      emit(HabitsError('Не удалось обновить статус привычки: $e'));
+      final normalizedDate = AppDateUtils.normalizeDate(date);
+
+      await repository.toggleHabitCompletion(
+        habitId,
+        normalizedDate,
+        isCompleted,
+      );
+
+      return const OperationResult.success();
+    } catch (error) {
+      final message = 'Не удалось обновить статус привычки: $error';
+      emit(HabitsError(message));
+
+      return OperationResult.failure(message);
     }
   }
 

@@ -1,17 +1,37 @@
 
+import 'dart:async';
+
 import 'package:daily/utils/app_theme.dart';
 import 'package:flutter/material.dart';
+
+enum AppHintType {
+  info,
+  success,
+  warning,
+  error,
+}
 
 class AppHints {
   AppHints._();
 
   static OverlayEntry? _activeEntry;
+  static Timer? _dismissTimer;
 
-  static void showPastDayHint(BuildContext context) {
-    _activeEntry?.remove();
-    _activeEntry = null;
+  /// Shows a configurable notification at the bottom of the screen.
+  static void show(
+      BuildContext context, {
+        String? title,
+        required String message,
+        AppHintType type = AppHintType.info,
+        IconData? icon,
+        Duration duration = const Duration(seconds: 3),
+        String? actionLabel,
+        VoidCallback? onAction,
+      }) {
+    _removeActiveHint();
 
     final overlay = Overlay.of(context, rootOverlay: true);
+
     late final OverlayEntry entry;
 
     entry = OverlayEntry(
@@ -26,15 +46,14 @@ class AppHints {
             top: false,
             child: Material(
               color: Colors.transparent,
-              child: _PastDayHintCard(
-                onClose: () {
-                  if (entry.mounted) {
-                    entry.remove();
-                  }
-                  if (identical(_activeEntry, entry)) {
-                    _activeEntry = null;
-                  }
-                },
+              child: _AppHintCard(
+                title: title,
+                message: message,
+                type: type,
+                icon: icon,
+                actionLabel: actionLabel,
+                onAction: onAction,
+                onClose: () => _removeEntry(entry),
               ),
             ),
           ),
@@ -45,31 +64,165 @@ class AppHints {
     _activeEntry = entry;
     overlay.insert(entry);
 
-    Future<void>.delayed(const Duration(seconds: 3), () {
-      if (entry.mounted) {
-        entry.remove();
-      }
-      if (identical(_activeEntry, entry)) {
-        _activeEntry = null;
-      }
-    });
+    if (duration > Duration.zero) {
+      _dismissTimer = Timer(
+        duration,
+            () => _removeEntry(entry),
+      );
+    }
+  }
+
+  static void showInfo(
+      BuildContext context, {
+        String? title,
+        required String message,
+        Duration duration = const Duration(seconds: 3),
+      }) {
+    show(
+      context,
+      title: title,
+      message: message,
+      type: AppHintType.info,
+      duration: duration,
+    );
+  }
+
+  static void showSuccess(
+      BuildContext context, {
+        String? title,
+        required String message,
+        Duration duration = const Duration(seconds: 3),
+      }) {
+    show(
+      context,
+      title: title ?? 'Успешно',
+      message: message,
+      type: AppHintType.success,
+      duration: duration,
+    );
+  }
+
+  static void showWarning(
+      BuildContext context, {
+        String? title,
+        required String message,
+        Duration duration = const Duration(seconds: 3),
+      }) {
+    show(
+      context,
+      title: title ?? 'Внимание',
+      message: message,
+      type: AppHintType.warning,
+      duration: duration,
+    );
+  }
+
+  static void showError(
+      BuildContext context, {
+        String? title,
+        required String message,
+        Duration duration = const Duration(seconds: 4),
+      }) {
+    show(
+      context,
+      title: title ?? 'Ошибка',
+      message: message,
+      type: AppHintType.error,
+      duration: duration,
+    );
+  }
+
+  /// Keeps the existing API used by screens.
+  static void showPastDayHint(BuildContext context) {
+    showWarning(
+      context,
+      title: 'Прошлый день',
+      message: 'Состояние задач и привычек прошлого изменить нельзя',
+      duration: const Duration(seconds: 3),
+    );
+  }
+
+  static void _removeActiveHint() {
+    _dismissTimer?.cancel();
+    _dismissTimer = null;
+
+    final entry = _activeEntry;
+    _activeEntry = null;
+
+    if (entry != null && entry.mounted) {
+      entry.remove();
+    }
+  }
+
+  static void _removeEntry(OverlayEntry entry) {
+    if (identical(_activeEntry, entry)) {
+      _dismissTimer?.cancel();
+      _dismissTimer = null;
+      _activeEntry = null;
+    }
+
+    if (entry.mounted) {
+      entry.remove();
+    }
   }
 }
 
-class _PastDayHintCard extends StatefulWidget {
-  const _PastDayHintCard({required this.onClose});
+class _AppHintCard extends StatefulWidget {
+  const _AppHintCard({
+    required this.message,
+    required this.type,
+    required this.onClose,
+    this.title,
+    this.icon,
+    this.actionLabel,
+    this.onAction,
+  });
 
+  final String? title;
+  final String message;
+  final AppHintType type;
+  final IconData? icon;
+  final String? actionLabel;
+  final VoidCallback? onAction;
   final VoidCallback onClose;
 
   @override
-  State<_PastDayHintCard> createState() => _PastDayHintCardState();
+  State<_AppHintCard> createState() => _AppHintCardState();
 }
 
-class _PastDayHintCardState extends State<_PastDayHintCard>
+class _AppHintCardState extends State<_AppHintCard>
     with SingleTickerProviderStateMixin {
   late final AnimationController _controller;
   late final Animation<Offset> _slideAnimation;
   late final Animation<double> _fadeAnimation;
+
+  Color get _accentColor {
+    switch (widget.type) {
+      case AppHintType.info:
+        return AppColors.primary;
+      case AppHintType.success:
+        return Colors.green;
+      case AppHintType.warning:
+        return Colors.orange;
+      case AppHintType.error:
+        return AppColors.error;
+    }
+  }
+
+  IconData get _icon {
+    if (widget.icon != null) return widget.icon!;
+
+    switch (widget.type) {
+      case AppHintType.info:
+        return Icons.info_outline_rounded;
+      case AppHintType.success:
+        return Icons.check_circle_outline_rounded;
+      case AppHintType.warning:
+        return Icons.warning_amber_rounded;
+      case AppHintType.error:
+        return Icons.error_outline_rounded;
+    }
+  }
 
   @override
   void initState() {
@@ -115,7 +268,7 @@ class _PastDayHintCardState extends State<_PastDayHintCard>
             color: AppColors.surfaceVariant,
             borderRadius: BorderRadius.circular(18),
             border: Border.all(
-              color: AppColors.error.withValues(alpha: 0.5),
+              color: _accentColor.withValues(alpha: 0.5),
             ),
             boxShadow: [
               BoxShadow(
@@ -133,36 +286,56 @@ class _PastDayHintCardState extends State<_PastDayHintCard>
                   width: 42,
                   height: 42,
                   decoration: BoxDecoration(
-                    color: AppColors.error.withValues(alpha: 0.12),
+                    color: _accentColor.withValues(alpha: 0.12),
                     borderRadius: BorderRadius.circular(13),
                   ),
-                  child: const Icon(
-                    Icons.lock_clock_rounded,
-                    color: AppColors.error,
+                  child: Icon(
+                    _icon,
+                    color: _accentColor,
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Expanded(
+                Expanded(
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisSize: MainAxisSize.min,
                     children: [
-                      Text(
-                        'Прошлый день',
-                        style: TextStyle(
-                          color: AppColors.textPrimary,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 14,
+                      if (widget.title != null) ...[
+                        Text(
+                          widget.title!,
+                          style: const TextStyle(
+                            color: AppColors.textPrimary,
+                            fontWeight: FontWeight.w700,
+                            fontSize: 14,
+                          ),
                         ),
-                      ),
-                      SizedBox(height: 3),
+                        const SizedBox(height: 3),
+                      ],
                       Text(
-                        'Выполнение задач и привычек нельзя изменить.',
-                        style: TextStyle(
+                        widget.message,
+                        style: const TextStyle(
                           color: AppColors.textSecondary,
                           fontSize: 12,
                         ),
                       ),
+                      if (widget.actionLabel != null &&
+                          widget.onAction != null) ...[
+                        const SizedBox(height: 6),
+                        Align(
+                          alignment: Alignment.centerLeft,
+                          child: TextButton(
+                            onPressed: widget.onAction,
+                            style: TextButton.styleFrom(
+                              foregroundColor: _accentColor,
+                              padding: EdgeInsets.zero,
+                              minimumSize: const Size(0, 32),
+                              tapTargetSize:
+                              MaterialTapTargetSize.shrinkWrap,
+                            ),
+                            child: Text(widget.actionLabel!),
+                          ),
+                        ),
+                      ],
                     ],
                   ),
                 ),
