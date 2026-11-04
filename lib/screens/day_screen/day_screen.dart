@@ -2,6 +2,7 @@
 import 'package:daily/cubits/habits/habits_cubit.dart';
 import 'package:daily/cubits/habits/habits_state.dart';
 import 'package:daily/cubits/heatmap/heatmap_cubit.dart';
+import 'package:daily/cubits/notes/notes_cubit.dart';
 import 'package:daily/cubits/reviews/reviews_cubit.dart';
 import 'package:daily/cubits/reviews/reviews_state.dart';
 import 'package:daily/cubits/tasks/tasks_cubit.dart';
@@ -21,44 +22,51 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 class DayScreenBottomSheet extends StatefulWidget {
   final DateTime date;
   final HeatmapCubit heatmapCubit;
+  final NotesCubit notesCubit;
 
   const DayScreenBottomSheet({
     super.key,
     required this.date,
     required this.heatmapCubit,
+    required this.notesCubit
   });
 
-  static void show(BuildContext context, DateTime date) {
-    final heatmapCubit = context.read<HeatmapCubit>();
+  static Future<void> show(BuildContext context, DateTime date) async {
     final targetDate = AppDateUtils.normalizeDate(date);
 
-    showModalBottomSheet<void>(
+    final heatmapCubit = context.read<HeatmapCubit>();
+    final notesCubit = context.read<NotesCubit>();
+
+    await showModalBottomSheet<void>(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (_) => MultiBlocProvider(
         providers: [
+          BlocProvider<HeatmapCubit>.value(value: heatmapCubit),
+          BlocProvider<NotesCubit>.value(value: notesCubit),
           BlocProvider<TasksCubit>(
-            create: (_) => getIt<TasksCubit>()
-              ..loadTasksForDate(targetDate),
+            create: (_) => getIt<TasksCubit>()..loadTasksForDate(targetDate),
           ),
           BlocProvider<HabitsCubit>(
-            create: (_) => getIt<HabitsCubit>()
-              ..loadHabits(targetDate),
+            create: (_) => getIt<HabitsCubit>()..loadHabits(targetDate),
           ),
           BlocProvider<ReviewsCubit>(
-            create: (_) => getIt<ReviewsCubit>()
-              ..loadReviewForDate(targetDate),
+            create: (_) => getIt<ReviewsCubit>()..loadReviewForDate(targetDate),
           ),
         ],
         child: DayScreenBottomSheet(
           date: targetDate,
           heatmapCubit: heatmapCubit,
+          notesCubit: notesCubit,
         ),
       ),
     );
-  }
 
+    if (!context.mounted) return;
+
+    context.read<HeatmapCubit>().loadHeatmapData();
+  }
   @override
   State<DayScreenBottomSheet> createState() =>
       _DayScreenBottomSheetState();
@@ -396,10 +404,10 @@ class _DayScreenBottomSheetState
 
                         final completionPct =
                         _calculateCompletionPercentage(
-                          tasks: tasksState.todayTasks,
+                          tasks: tasksState.loadedTasks,
                           habits: habitsState.activeHabits,
                           habitCompletions:
-                          habitsState.todayCompletions,
+                          habitsState.loadedCompletions,
                         );
 
                         return Card(
@@ -453,7 +461,6 @@ class _DayScreenBottomSheetState
 
                 TasksList(
                   date: widget.date,
-                  heatmapCubit: widget.heatmapCubit,
                   onLockedTap: () {
                     AppHints.showPastDayHint(context);
                   },
@@ -490,7 +497,6 @@ class _DayScreenBottomSheetState
 
                 HabitsList(
                   date: widget.date,
-                  heatmapCubit: widget.heatmapCubit,
                 ),
 
                 const SizedBox(height: 16),

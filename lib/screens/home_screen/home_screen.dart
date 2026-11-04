@@ -19,6 +19,7 @@ import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/service_locator.dart';
 import 'package:daily/widgets/custom_contribution_heatmap.dart';
 import 'package:daily/widgets/habits_list.dart';
+import 'package:daily/widgets/notes_reminder_list.dart';
 import 'package:daily/widgets/tasks_list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
@@ -198,6 +199,7 @@ class _HomeViewState extends State<HomeView> {
         onRefresh: () async => _reloadAllCubits(context),
         child: ListView(
           padding: const EdgeInsets.all(4),
+          scrollCacheExtent: .viewport(2.0),
           children: [
             // ================= 1. HEATMAP SECTION =================
             BlocBuilder<HeatmapCubit, HeatmapState>(
@@ -340,7 +342,9 @@ class _HomeViewState extends State<HomeView> {
                       padding: const EdgeInsets.all(8.0),
                       child: TasksList(
                         date: AppDateUtils.today,
-                        heatmapCubit: context.read<HeatmapCubit>(),
+                        onTaskStatusChanged: () async {
+                          await context.read<HeatmapCubit>().loadHeatmapData();
+                        },
                         onLockedTap: () {
                           AppHints.showPastDayHint(context);
                         },
@@ -423,7 +427,9 @@ class _HomeViewState extends State<HomeView> {
                       padding: const EdgeInsets.all(8.0),
                       child: HabitsList(
                         date: AppDateUtils.today,
-                        heatmapCubit: context.read<HeatmapCubit>(),
+                        onHabitStatusChanged: () async {
+                          await context.read<HeatmapCubit>().loadHeatmapData();
+                        },
                       ),
                     ),
                 ],
@@ -431,77 +437,27 @@ class _HomeViewState extends State<HomeView> {
             ),
 
             // ================= 4. NOTES PREVIEW SECTION =================
-            BlocBuilder<NotesCubit, NotesState>(
-              builder: (context, state) {
-                return Card(
-                  child: Padding(
-                    padding: const EdgeInsets.all(12),
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                          children: [
-                            const Text('Заметки', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                            Row(
-                              children: [
-                                IconButton(
-                                  icon: const Icon(Icons.add_circle, color: AppColors.primary),
-                                  tooltip: 'Быстро создать заметку',
-                                  onPressed: () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const NotesScreen()),
-                                    );
-                                    if (context.mounted) {
-                                      _reloadAllCubits(context);
-                                    }
-                                  },
-                                ),
-                                TextButton(
-                                  onPressed: () async {
-                                    await Navigator.push(
-                                      context,
-                                      MaterialPageRoute(builder: (_) => const NotesScreen()),
-                                    );
-                                    if (context.mounted) {
-                                      _reloadAllCubits(context);
-                                    }
-                                  },
-                                  child: const Text('Все заметки', style: TextStyle(color: AppColors.primary)),
-                                ),
-                              ],
-                            ),
-                          ],
-                        ),
-                        if (state is NotesLoaded) ...[
-                          if (state.recentNotes.isEmpty)
-                            const Padding(
-                              padding: EdgeInsets.symmetric(vertical: 8),
-                              child: Text('Заметок пока нет.', style: TextStyle(color: AppColors.textSecondary)),
-                            )
-                          else
-                            ...state.recentNotes.map((note) => ListTile(
-                                  contentPadding: EdgeInsets.zero,
-                                  title: Text(note.title, style: const TextStyle(fontWeight: FontWeight.bold)),
-                                  subtitle: Text(
-                                    note.description,
-                                    maxLines: 1,
-                                    overflow: TextOverflow.ellipsis,
-                                    style: const TextStyle(color: AppColors.textSecondary),
-                                  ),
-                                  trailing: Text(
-                                    AppDateUtils.formatDateDisplay(note.createdAt),
-                                    style: const TextStyle(fontSize: 11, color: Colors.grey),
-                                  ),
-                                )),
-                        ],
-                      ],
-                    ),
-                  ),
-                );
-              },
+            Card(
+              child: Padding(
+                padding: const EdgeInsets.all(12),
+                child: NotesReminderList(
+                  date: AppDateUtils.today,
+                  onAdd: () {
+                    Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => const NotesScreen(),
+                      ),
+                    ).then((_) {
+                      if (context.mounted) {
+                        context.read<NotesCubit>().loadNotes();
+                      }
+                    });
+                  },
+                ),
+              ),
             ),
+
 
             // ================= 5. DAILY REVIEW SECTION =================
             BlocBuilder<ReviewsCubit, ReviewsState>(

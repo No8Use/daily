@@ -21,7 +21,7 @@ class TasksCubit extends Cubit<TasksState> {
     _tasksSub?.cancel();
     _tasksSub = repository.watchTasksForDate(_currentDate).listen((tasks) {
       emit(TasksLoaded(
-        todayTasks: tasks,
+        loadedTasks: tasks,
         selectedDate: _currentDate,
       ));
     }, onError: (e) {

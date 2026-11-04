@@ -12,12 +12,12 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 class HabitsList extends StatelessWidget {
   const HabitsList({
     required this.date,
-    required this.heatmapCubit,
+    this.onHabitStatusChanged,
     super.key,
   });
 
   final DateTime date;
-  final HeatmapCubit heatmapCubit;
+  final VoidCallback? onHabitStatusChanged;
 
   @override
   Widget build(BuildContext context) {
@@ -47,7 +47,7 @@ class HabitsList extends StatelessWidget {
         }
 
         final habits = state.activeHabits;
-        final completions = state.todayCompletions;
+        final completions = state.loadedCompletions;
 
         if (habits.isEmpty) {
           return const Padding(
@@ -80,8 +80,8 @@ class HabitsList extends StatelessWidget {
                   !previousState,
                 );
 
-                if (result.ok) {
-                  await heatmapCubit.loadHeatmapData();
+                if (result.ok && onHabitStatusChanged != null) {
+                  onHabitStatusChanged!();
                 }
 
                 return result;

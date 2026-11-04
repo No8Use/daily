@@ -11,14 +11,14 @@ import 'package:flutter_bloc/flutter_bloc.dart';
 class TasksList extends StatelessWidget {
   const TasksList({
     required this.date,
-    required this.heatmapCubit,
+    this.onTaskStatusChanged,
     this.onEditTask,
     this.onLockedTap,
     super.key,
   });
 
   final DateTime date;
-  final HeatmapCubit heatmapCubit;
+  final VoidCallback? onTaskStatusChanged;
 
   /// Callback экрана, который отвечает за открытие редактора задачи.
   final void Function(BuildContext context, Task task)? onEditTask;
@@ -53,7 +53,7 @@ class TasksList extends StatelessWidget {
           return const SizedBox.shrink();
         }
 
-        final tasks = state.todayTasks;
+        final tasks = state.loadedTasks;
 
         if (tasks.isEmpty) {
           return const Padding(
@@ -87,8 +87,8 @@ class TasksList extends StatelessWidget {
                   previousStateForToggle,
                 );
 
-                if (result.ok) {
-                  await heatmapCubit.loadHeatmapData();
+                if (result.ok && onTaskStatusChanged != null) {
+                  onTaskStatusChanged!();
                 }
 
                 return result;

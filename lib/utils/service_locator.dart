@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:daily/cubits/habits/habits_cubit.dart';
 import 'package:daily/cubits/heatmap/heatmap_cubit.dart';
 import 'package:daily/cubits/notes/notes_cubit.dart';
@@ -42,4 +44,7 @@ Future<void> setupServiceLocator() async {
       tasksRepository: getIt<TasksRepository>(),
     ),
   );
+
+  // Utils
+  getIt.registerLazySingleton<Random>(() => Random());
 }

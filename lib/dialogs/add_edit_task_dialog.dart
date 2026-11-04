@@ -1,5 +1,7 @@
+
 import 'package:daily/data/database/app_database.dart';
 import 'package:daily/data/repositories/tasks_repository.dart';
+import 'package:daily/dialogs/delete_task_dialog.dart';
 import 'package:daily/utils/app_theme.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/service_locator.dart';
@@ -15,8 +17,6 @@ class AddEditTaskDialog extends StatefulWidget {
 
   final Task? task;
   final DateTime? initialDate;
-
-  /// Called after creating, updating, or deleting a task.
   final Future<void> Function()? onSaved;
 
   bool get isEditing => task != null;
@@ -150,41 +150,12 @@ class _AddEditTaskDialogState extends State<AddEditTaskDialog> {
     final task = widget.task;
     if (task == null) return;
 
-    final shouldDelete = await showDialog<bool>(
-      context: context,
-      builder: (confirmationContext) {
-        return AlertDialog(
-          icon: const Icon(
-            Icons.delete_outline_rounded,
-            color: AppColors.error,
-            size: 32,
-          ),
-          title: const Text('Удалить задачу?'),
-          content: Text(
-            'Задача «${task.title}» будет удалена без возможности восстановления.',
-          ),
-          actions: [
-            TextButton(
-              onPressed: () =>
-                  Navigator.of(confirmationContext).pop(false),
-              child: const Text('Отмена'),
-            ),
-            FilledButton.icon(
-              onPressed: () =>
-                  Navigator.of(confirmationContext).pop(true),
-              icon: const Icon(Icons.delete_outline_rounded),
-              label: const Text('Удалить'),
-              style: FilledButton.styleFrom(
-                backgroundColor: AppColors.error,
-                foregroundColor: Colors.white,
-              ),
-            ),
-          ],
-        );
-      },
+    final shouldDelete = await DeleteTaskDialog.show(
+      context,
+      taskTitle: task.title,
     );
 
-    if (shouldDelete != true || !mounted) return;
+    if (!shouldDelete || !mounted) return;
 
     setState(() {
       _isSaving = true;
@@ -201,8 +172,7 @@ class _AddEditTaskDialogState extends State<AddEditTaskDialog> {
       await widget.onSaved?.call();
 
       if (!mounted) return;
-      Navigator.of(context).pop(); // Close the task form.
-      Navigator.of(context).pop(); // Close the confirmation's parent route.
+      Navigator.of(context).pop();
     } catch (_) {
       if (!mounted) return;
 
@@ -215,150 +185,283 @@ class _AddEditTaskDialogState extends State<AddEditTaskDialog> {
 
   @override
   Widget build(BuildContext context) {
-    final isEditing = widget.isEditing;
+    final mediaQuery = MediaQuery.of(context);
+    final availableHeight =
+        mediaQuery.size.height - mediaQuery.viewInsets.bottom - 32;
 
-    return AlertDialog(
-      icon: Icon(
-        isEditing ? Icons.edit_note_rounded : Icons.add_task_rounded,
-        color: AppColors.primary,
-        size: 32,
+    return Dialog(
+      insetPadding: const EdgeInsets.symmetric(
+        horizontal: 16,
+        vertical: 16,
       ),
-      title: Text(
-        isEditing ? 'Редактировать задачу' : 'Новая задача',
+      backgroundColor: AppColors.cardBackground,
+      surfaceTintColor: Colors.transparent,
+      elevation: 12,
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(16),
       ),
-      content: SingleChildScrollView(
+      child: ConstrainedBox(
+        constraints: BoxConstraints(
+          maxHeight: availableHeight.clamp(180.0, double.infinity),
+        ),
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            TextField(
-              controller: _titleController,
-              autofocus: true,
-              enabled: !_isSaving,
-              textCapitalization: TextCapitalization.sentences,
-              decoration: const InputDecoration(
-                labelText: 'Название задачи',
-                prefixIcon: Icon(Icons.edit_rounded),
-              ),
-              onChanged: (_) {
-                if (_errorMessage != null) {
-                  setState(() => _errorMessage = null);
-                }
-              },
-            ),
-            const SizedBox(height: 12),
-            TextField(
-              controller: _descriptionController,
-              enabled: !_isSaving,
-              textCapitalization: TextCapitalization.sentences,
-              minLines: 1,
-              maxLines: 3,
-              decoration: const InputDecoration(
-                labelText: 'Описание',
-                hintText: 'Необязательно',
-                prefixIcon: Icon(Icons.notes_rounded),
-              ),
-            ),
-            const SizedBox(height: 12),
-            Material(
-              color: AppColors.cardBackground,
-              borderRadius: BorderRadius.circular(12),
-              child: InkWell(
-                borderRadius: BorderRadius.circular(12),
-                onTap: _isSaving ? null : _pickDate,
-                child: Padding(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: 12,
-                    vertical: 14,
+            Padding(
+              padding: const EdgeInsets.fromLTRB(16, 12, 12, 8),
+              child: Row(
+                children: [
+                  Icon(
+                    widget.isEditing
+                        ? Icons.edit_note_rounded
+                        : Icons.add_task_rounded,
+                    color: AppColors.primary,
+                    size: 22,
                   ),
-                  child: Row(
-                    children: [
-                      const Icon(
-                        Icons.calendar_month_rounded,
-                        color: AppColors.primary,
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Text(
+                      widget.isEditing
+                          ? 'Редактировать задачу'
+                          : 'Новая задача',
+                      style: Theme.of(context)
+                          .textTheme
+                          .titleMedium
+                          ?.copyWith(
+                        fontWeight: FontWeight.w700,
                       ),
-                      const SizedBox(width: 12),
-                      Expanded(
-                        child: Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            const Text(
-                              'Дата задачи',
-                              style: TextStyle(
+                    ),
+                  ),
+                  IconButton(
+                    tooltip: 'Закрыть',
+                    visualDensity: VisualDensity.compact,
+                    onPressed: _isSaving
+                        ? null
+                        : () => Navigator.of(context).pop(),
+                    icon: const Icon(Icons.close_rounded),
+                  ),
+                ],
+              ),
+            ),
+            const Divider(height: 1),
+            Flexible(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.fromLTRB(16, 4, 16, 16),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    TextField(
+                      controller: _titleController,
+                      autofocus: false,
+                      enabled: !_isSaving,
+                      textCapitalization: TextCapitalization.sentences,
+                      decoration: const InputDecoration(
+                        labelText: 'Название задачи',
+                        prefixIcon: Icon(Icons.edit_rounded),
+                      ),
+                      onChanged: (_) {
+                        if (_errorMessage != null) {
+                          setState(() => _errorMessage = null);
+                        }
+                      },
+                    ),
+                    const SizedBox(height: 12),
+                    TextField(
+                      controller: _descriptionController,
+                      enabled: !_isSaving,
+                      textCapitalization: TextCapitalization.sentences,
+                      minLines: 1,
+                      maxLines: 3,
+                      decoration: const InputDecoration(
+                        labelText: 'Описание',
+                        hintText: 'Необязательно',
+                        prefixIcon: Icon(Icons.notes_rounded),
+                      ),
+                    ),
+                    const SizedBox(height: 12),
+                    Material(
+                      color: AppColors.cardBackground,
+                      borderRadius: BorderRadius.circular(12),
+                      child: InkWell(
+                        borderRadius: BorderRadius.circular(12),
+                        onTap: _isSaving ? null : _pickDate,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(
+                            horizontal: 12,
+                            vertical: 14,
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(
+                                Icons.calendar_month_rounded,
+                                color: AppColors.primary,
+                              ),
+                              const SizedBox(width: 12),
+                              Expanded(
+                                child: Column(
+                                  crossAxisAlignment:
+                                  CrossAxisAlignment.start,
+                                  children: [
+                                    const Text(
+                                      'Дата задачи',
+                                      style: TextStyle(
+                                        color: AppColors.textSecondary,
+                                        fontSize: 12,
+                                      ),
+                                    ),
+                                    const SizedBox(height: 3),
+                                    Text(
+                                      AppDateUtils.formatDateDisplay(
+                                        _selectedDueDate,
+                                      ),
+                                      style: const TextStyle(
+                                        fontWeight: FontWeight.w600,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                              const Icon(
+                                Icons.chevron_right_rounded,
                                 color: AppColors.textSecondary,
-                                fontSize: 12,
                               ),
-                            ),
-                            const SizedBox(height: 3),
-                            Text(
-                              AppDateUtils.formatDateDisplay(
-                                _selectedDueDate,
-                              ),
-                              style: const TextStyle(
-                                fontWeight: FontWeight.w600,
-                              ),
-                            ),
-                          ],
+                            ],
+                          ),
                         ),
                       ),
-                      const Icon(
-                        Icons.chevron_right_rounded,
-                        color: AppColors.textSecondary,
+                    ),
+                    if (_errorMessage != null) ...[
+                      const SizedBox(height: 12),
+                      Align(
+                        alignment: Alignment.centerLeft,
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            color: AppColors.error,
+                            fontSize: 12,
+                          ),
+                        ),
                       ),
                     ],
-                  ),
+                  ],
                 ),
               ),
             ),
-            if (_errorMessage != null) ...[
-              const SizedBox(height: 12),
-              Align(
-                alignment: Alignment.centerLeft,
-                child: Text(
-                  _errorMessage!,
-                  style: const TextStyle(
-                    color: AppColors.error,
-                    fontSize: 12,
+            SizedBox(
+              height: 56,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  if (widget.isEditing)
+                    SizedBox(
+                      width: 64,
+                      child: _BottomActionButton(
+                        onPressed: _isSaving ? null : _delete,
+                        backgroundColor: AppColors.error,
+                        foregroundColor: Colors.white,
+                        borderRadius: const BorderRadius.only(
+                          bottomLeft: Radius.circular(16),
+                        ),
+                        child: const Icon(
+                          Icons.delete_outline_rounded,
+                        ),
+                      ),
+                    ),
+                  Expanded(
+                    child: _BottomActionButton(
+                      onPressed: _isSaving ? null : _save,
+                      backgroundColor: AppColors.primary,
+                      foregroundColor: Colors.black,
+                      child: _isSaving
+                          ? const SizedBox(
+                        width: 20,
+                        height: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.black,
+                        ),
+                      )
+                          : Text(
+                        widget.isEditing
+                            ? 'Сохранить'
+                            : 'Создать',
+                        style: const TextStyle(
+                          fontWeight: FontWeight.w700,
+                        ),
+                      ),
+                    ),
                   ),
-                ),
+                  SizedBox(
+                    width: 104,
+                    child: _BottomActionButton(
+                      onPressed: _isSaving
+                          ? null
+                          : () => Navigator.of(context).pop(),
+                      backgroundColor: Theme.of(context)
+                          .colorScheme
+                          .surfaceContainerHighest,
+                      foregroundColor:
+                      Theme.of(context).colorScheme.onSurface,
+                      borderRadius: const BorderRadius.only(
+                        bottomRight: Radius.circular(16),
+                      ),
+                      child: const Text('Отмена'),
+                    ),
+                  ),
+                ],
               ),
-            ],
+            ),
           ],
         ),
       ),
-      actions: [
-        if (isEditing)
-          IconButton(
-            tooltip: 'Удалить задачу',
-            onPressed: _isSaving ? null : _delete,
-            icon: const Icon(
-              Icons.delete_outline_rounded,
-              color: AppColors.error,
+    );
+  }
+}
+
+class _BottomActionButton extends StatelessWidget {
+  const _BottomActionButton({
+    required this.onPressed,
+    required this.backgroundColor,
+    required this.foregroundColor,
+    required this.child,
+    this.borderRadius = BorderRadius.zero,
+  });
+
+  final VoidCallback? onPressed;
+  final Color backgroundColor;
+  final Color foregroundColor;
+  final Widget child;
+  final BorderRadius borderRadius;
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: backgroundColor,
+      child: InkWell(
+        onTap: onPressed,
+        borderRadius: borderRadius,
+        child: Ink(
+          decoration: BoxDecoration(
+            borderRadius: borderRadius,
+          ),
+          child: Center(
+            child: IconTheme(
+              data: IconThemeData(
+                color: foregroundColor,
+                size: 22,
+              ),
+              child: DefaultTextStyle(
+                style: TextStyle(
+                  color: foregroundColor,
+                  fontSize: 14,
+                ),
+                child: child,
+              ),
             ),
           ),
-        TextButton(
-          onPressed: _isSaving
-              ? null
-              : () => Navigator.of(context).pop(),
-          child: const Text('Отмена'),
         ),
-        FilledButton(
-          onPressed: _isSaving ? null : _save,
-          style: FilledButton.styleFrom(
-            backgroundColor: AppColors.primary,
-            foregroundColor: Colors.black,
-          ),
-          child: _isSaving
-              ? const SizedBox(
-            width: 18,
-            height: 18,
-            child: CircularProgressIndicator(
-              strokeWidth: 2,
-              color: Colors.black,
-            ),
-          )
-              : Text(isEditing ? 'Сохранить' : 'Создать'),
-        ),
-      ],
+      ),
     );
   }
 }

@@ -1,7 +1,11 @@
 
+import 'dart:math';
+
 import 'package:daily/utils/app_hints.dart';
+import 'package:daily/utils/card_done_patterns.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/models/operation_result.dart';
+import 'package:daily/utils/service_locator.dart';
 import 'package:flutter/material.dart';
 
 class CompletionCardShell extends StatefulWidget {
@@ -11,6 +15,7 @@ class CompletionCardShell extends StatefulWidget {
     required this.onChanged,
     required this.childBuilder,
     this.onLockedTap,
+    this.doneStyle = false,
     super.key,
   });
 
@@ -23,6 +28,7 @@ class CompletionCardShell extends StatefulWidget {
       bool isSaving,
       ) childBuilder;
   final VoidCallback? onLockedTap;
+  final bool doneStyle;
 
   @override
   State<CompletionCardShell> createState() => _CompletionCardShellState();
@@ -34,6 +40,7 @@ class _CompletionCardShellState extends State<CompletionCardShell>
 
   late bool _completed;
   late final AnimationController _controller;
+  late final int _strokePattern;
 
   bool _saving = false;
   bool _animating = false;
@@ -47,6 +54,7 @@ class _CompletionCardShellState extends State<CompletionCardShell>
   void initState() {
     super.initState();
     _completed = widget.initialCompleted;
+    _strokePattern = getIt<Random>().nextInt(8); // change 8 is CardDonePatterns.patterns.length will change
 
     _controller = AnimationController(
       vsync: this,
@@ -179,6 +187,7 @@ class _CompletionCardShellState extends State<CompletionCardShell>
                                 ? (_drawing ? progress : 1 - progress)
                                 : 1,
                             color: _strokeColor,
+                            pattern: _strokePattern
                           ),
                         ),
                       ),
@@ -197,49 +206,28 @@ class _HandStrokePainter extends CustomPainter {
   const _HandStrokePainter({
     required this.progress,
     required this.color,
+    required this.pattern,
   });
 
   final double progress;
   final Color color;
-
-  // Normalized hand-drawn control points.
-  // Each point is (horizontal position, vertical position).
-  static const _points = <Offset>[
-    Offset(0.00, 0.68),
-    Offset(0.06, 0.32),
-    Offset(0.10, 0.17),
-    Offset(0.08, 0.72),
-    Offset(0.17, 0.26),
-    Offset(0.15, 0.84),
-    Offset(0.26, 0.35),
-    Offset(0.30, 0.22),
-    Offset(0.27, 0.69),
-    Offset(0.39, 0.31),
-    Offset(0.43, 0.52),
-    Offset(0.51, 0.24),
-    Offset(0.55, 0.64),
-    Offset(0.63, 0.36),
-    Offset(0.68, 0.48),
-    Offset(0.74, 0.30),
-    Offset(0.78, 0.55),
-    Offset(0.85, 0.40),
-    Offset(0.91, 0.48),
-    Offset(1.00, 0.35),
-  ];
+  final int pattern;
 
   @override
   void paint(Canvas canvas, Size size) {
     if (size.isEmpty || progress <= 0) return;
 
+    final points = CardDonePatterns.patterns[pattern];
+
     final path = Path()
       ..moveTo(
-        _points.first.dx * size.width,
-        _points.first.dy * size.height,
+        points.first.dx * size.width,
+        points.first.dy * size.height,
       );
 
-    for (var i = 1; i < _points.length; i++) {
-      final previous = _points[i - 1];
-      final current = _points[i];
+    for (var i = 1; i < points.length; i++) {
+      final previous = points[i - 1];
+      final current = points[i];
 
       final midpoint = Offset(
         (previous.dx + current.dx) * size.width / 2,
@@ -255,8 +243,8 @@ class _HandStrokePainter extends CustomPainter {
     }
 
     path.lineTo(
-      _points.last.dx * size.width,
-      _points.last.dy * size.height,
+      points.last.dx * size.width,
+      points.last.dy * size.height,
     );
 
     final metrics = path.computeMetrics().toList();
@@ -269,9 +257,9 @@ class _HandStrokePainter extends CustomPainter {
     );
 
     final paint = Paint()
-      ..color = color
+      ..color = color.withValues(alpha: 0.8)
       ..style = PaintingStyle.stroke
-      ..strokeWidth = (size.height * 0.22).clamp(10.0, 20.0)
+      ..strokeWidth = (size.height * 0.154).clamp(7.0, 14.0)
       ..strokeCap = StrokeCap.round
       ..strokeJoin = StrokeJoin.round;
 
@@ -279,6 +267,9 @@ class _HandStrokePainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant _HandStrokePainter oldDelegate) =>
-      oldDelegate.progress != progress || oldDelegate.color != color;
+  bool shouldRepaint(covariant _HandStrokePainter oldDelegate) {
+    return oldDelegate.progress != progress ||
+        oldDelegate.color != color ||
+        oldDelegate.pattern != pattern;
+  }
 }
