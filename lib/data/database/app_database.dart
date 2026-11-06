@@ -56,6 +56,40 @@ class DailyReviews extends Table {
   IntColumn get rating => integer()(); // Range 1..10
 }
 
+/// Life calendar configuration.
+class LifeCalendarSettings extends Table {
+  IntColumn get id => integer().withDefault(const Constant(1))();
+
+  IntColumn get startAge => integer()();
+
+  IntColumn get targetAge => integer()();
+
+  DateTimeColumn get startedAt => dateTime()();
+
+  @override
+  Set<Column> get primaryKey => {id};
+
+  @override
+  List<String> get customConstraints => [
+    'CHECK (id = 1)',
+    'CHECK (start_age >= 0)',
+    'CHECK (target_age > start_age)',
+  ];
+}
+
+/// Reviews for completed weeks.
+class WeeklyReviews extends Table {
+  IntColumn get id => integer().autoIncrement()();
+
+  DateTimeColumn get weekStart => dateTime().unique()();
+
+  TextColumn get description => text().withDefault(const Constant(''))();
+
+  IntColumn get rating => integer()();
+
+  DateTimeColumn get createdAt => dateTime()();
+}
+
 LazyDatabase _openConnection() {
   return LazyDatabase(() async {
     final dbFolder = await getApplicationDocumentsDirectory();
@@ -64,7 +98,17 @@ LazyDatabase _openConnection() {
   });
 }
 
-@DriftDatabase(tables: [Habits, HabitCompletions, Tasks, Notes, DailyReviews])
+@DriftDatabase(
+  tables: [
+    Habits,
+    HabitCompletions,
+    Tasks,
+    Notes,
+    DailyReviews,
+    LifeCalendarSettings,
+    WeeklyReviews,
+  ],
+)
 class AppDatabase extends _$AppDatabase {
   AppDatabase([QueryExecutor? e]) : super(e ?? _openConnection());
 

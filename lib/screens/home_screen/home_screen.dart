@@ -1,29 +1,17 @@
 import 'package:daily/cubits/habits/habits_cubit.dart';
-import 'package:daily/cubits/habits/habits_state.dart';
 import 'package:daily/cubits/heatmap/heatmap_cubit.dart';
-import 'package:daily/cubits/heatmap/heatmap_state.dart';
+import 'package:daily/cubits/life_calendar/life_calendar_cubit.dart';
+import 'package:daily/cubits/life_calendar/life_calendar_state.dart';
 import 'package:daily/cubits/notes/notes_cubit.dart';
-import 'package:daily/cubits/notes/notes_state.dart';
 import 'package:daily/cubits/reviews/reviews_cubit.dart';
-import 'package:daily/cubits/reviews/reviews_state.dart';
 import 'package:daily/cubits/tasks/tasks_cubit.dart';
-import 'package:daily/dialogs/add_edit_task_dialog.dart';
-import 'package:daily/dialogs/import_mode_dialog.dart';
-import 'package:daily/screens/day_screen/day_screen.dart';
-import 'package:daily/screens/habits_screen/habits_screen.dart';
-import 'package:daily/screens/notes_screen/notes_screen.dart';
-import 'package:daily/utils/app_hints.dart';
+import 'package:daily/screens/summary_screen/summary_screen.dart';
+import 'package:daily/screens/week_life_calendar/week_life_calendar_screen.dart';
 import 'package:daily/utils/app_theme.dart';
-import 'package:daily/utils/backup_service.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:daily/utils/service_locator.dart';
-import 'package:daily/widgets/custom_contribution_heatmap.dart';
-import 'package:daily/widgets/habits_list.dart';
-import 'package:daily/widgets/notes_reminder_list.dart';
-import 'package:daily/widgets/tasks_list.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
-import 'package:daily/utils/backup_service.dart' as utils;
 
 class HomeScreen extends StatefulWidget {
   const HomeScreen({super.key});
@@ -38,15 +26,27 @@ class _HomeScreenState extends State<HomeScreen> {
   late final HabitsCubit _habitsCubit;
   late final NotesCubit _notesCubit;
   late final ReviewsCubit _reviewsCubit;
+  late final LifeCalendarCubit _lifeCalendarCubit;
+
+  int _selectedPage = 0;
 
   @override
   void initState() {
     super.initState();
+
     _heatmapCubit = getIt<HeatmapCubit>()..loadHeatmapData();
-    _tasksCubit = getIt<TasksCubit>()..loadTasksForDate(AppDateUtils.today);
+
+    _tasksCubit = getIt<TasksCubit>()
+      ..loadTasksForDate(AppDateUtils.today);
+
     _habitsCubit = getIt<HabitsCubit>()..loadHabits();
+
     _notesCubit = getIt<NotesCubit>()..loadNotes();
-    _reviewsCubit = getIt<ReviewsCubit>()..loadReviewForDate(AppDateUtils.today);
+
+    _reviewsCubit = getIt<ReviewsCubit>()
+      ..loadReviewForDate(AppDateUtils.today);
+
+    _lifeCalendarCubit = getIt<LifeCalendarCubit>()..load();
   }
 
   @override
@@ -56,6 +56,8 @@ class _HomeScreenState extends State<HomeScreen> {
     _habitsCubit.close();
     _notesCubit.close();
     _reviewsCubit.close();
+    _lifeCalendarCubit.close();
+
     super.dispose();
   }
 
@@ -63,501 +65,128 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget build(BuildContext context) {
     return MultiBlocProvider(
       providers: [
-        BlocProvider<HeatmapCubit>.value(value: _heatmapCubit),
-        BlocProvider<TasksCubit>.value(value: _tasksCubit),
-        BlocProvider<HabitsCubit>.value(value: _habitsCubit),
-        BlocProvider<NotesCubit>.value(value: _notesCubit),
-        BlocProvider<ReviewsCubit>.value(value: _reviewsCubit),
+        BlocProvider.value(value: _heatmapCubit),
+        BlocProvider.value(value: _tasksCubit),
+        BlocProvider.value(value: _habitsCubit),
+        BlocProvider.value(value: _notesCubit),
+        BlocProvider.value(value: _reviewsCubit),
+        BlocProvider.value(value: _lifeCalendarCubit),
       ],
-      child: const HomeView(),
-    );
-  }
-}
-
-class HomeView extends StatefulWidget {
-  const HomeView({super.key});
-
-  @override
-  State<HomeView> createState() => _HomeViewState();
-}
-
-class _HomeViewState extends State<HomeView> {
-  bool _isTasksExpanded = true;
-  bool _isHabitsExpanded = true;
-
-  // Review editing state
-  bool _isEditingReview = false;
-  late TextEditingController _reviewDescController;
-  int _reviewRating = 5;
-
-  @override
-  void initState() {
-    super.initState();
-    _reviewDescController = TextEditingController();
-  }
-
-  @override
-  void dispose() {
-    _reviewDescController.dispose();
-    super.dispose();
-  }
-
-  void _reloadAllCubits(BuildContext context) {
-    context.read<HeatmapCubit>().loadHeatmapData();
-    context.read<TasksCubit>().loadTasksForDate(AppDateUtils.today);
-    context.read<HabitsCubit>().loadHabits();
-    context.read<NotesCubit>().loadNotes();
-    context.read<ReviewsCubit>().loadReviewForDate(AppDateUtils.today);
-    setState(() {
-      _isEditingReview = false;
-    });
-  }
-
-  Future<void> _handleExport(BuildContext context) async {
-    try {
-      await getIt<BackupService>().exportData();
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка экспорта: $e')),
-        );
-      }
-    }
-  }
-
-  Future<void> _handleImport(BuildContext context) async {
-    try {
-      final backupData = await getIt<BackupService>().pickBackupFile();
-      if (backupData == null) return;
-
-      if (!context.mounted) return;
-
-      final mode = await ImportModeDialog.show(context);
-
-      if (mode != null && context.mounted) {
-        await getIt<BackupService>().importData(
-          backupData,
-          mode == ImportMode.merge ? utils.ImportMode.merge : utils.ImportMode.replace,
-        );
-        if (context.mounted) {
-          _reloadAllCubits(context);
-          ScaffoldMessenger.of(context).showSnackBar(
-            const SnackBar(content: Text('Данные успешно импортированы!')),
-          );
-        }
-      }
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text('Ошибка импорта: $e')),
-        );
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Scaffold(
-      appBar: AppBar(
-        title: const Text('Daily', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 24)),
-        actions: [
-          PopupMenuButton<String>(
-            icon: const Icon(Icons.more_vert),
-            onSelected: (value) {
-              if (value == 'export') {
-                _handleExport(context);
-              } else if (value == 'import') {
-                _handleImport(context);
-              }
+      child: Scaffold(
+        appBar: AppBar(
+          leading: IconButton(
+            tooltip: _selectedPage == 0
+                ? 'Открыть Dashboard'
+                : 'Открыть Life Calendar',
+            icon: Icon(
+              _selectedPage == 0
+                  ? Icons.dashboard_outlined
+                  : Icons.calendar_view_week_rounded,
+              color: AppColors.primary,
+            ),
+            onPressed: () {
+              setState(() {
+                _selectedPage = _selectedPage == 0 ? 1 : 0;
+              });
             },
-            itemBuilder: (context) => [
-              const PopupMenuItem(
-                value: 'export',
-                child: Row(
-                  children: [
-                    Icon(Icons.upload, size: 20, color: AppColors.primary),
-                    SizedBox(width: 8),
-                    Text('Экспорт данных'),
-                  ],
-                ),
-              ),
-              const PopupMenuItem(
-                value: 'import',
-                child: Row(
-                  children: [
-                    Icon(Icons.download, size: 20, color: AppColors.primary),
-                    SizedBox(width: 8),
-                    Text('Импорт данных'),
-                  ],
-                ),
-              ),
-            ],
           ),
-        ],
-      ),
-      body: RefreshIndicator(
-        onRefresh: () async => _reloadAllCubits(context),
-        child: ListView(
-          padding: const EdgeInsets.all(4),
-          scrollCacheExtent: .viewport(2.0),
-          children: [
-            // ================= 1. HEATMAP SECTION =================
-            BlocBuilder<HeatmapCubit, HeatmapState>(
-              builder: (context, state) {
-                if (state is HeatmapLoading) {
-                  return const Card(
-                    child: Padding(
-                      padding: EdgeInsets.all(24),
-                      child: Center(child: CircularProgressIndicator()),
-                    ),
-                  );
-                }
-
-                if (state is HeatmapLoaded) {
-                  return Card(
-                    clipBehavior: Clip.antiAlias,
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.stretch,
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        SizedBox(
-                          width: double.infinity,
-                          child: SegmentedButton<HeatmapMode>(
-                            showSelectedIcon: false,
-                            style: ButtonStyle(
-                              tapTargetSize: MaterialTapTargetSize.shrinkWrap,
-                              visualDensity: VisualDensity.compact,
-                              side: WidgetStateProperty.all(BorderSide.none),
-                              shape: WidgetStateProperty.all(
-                                const RoundedRectangleBorder(
-                                  borderRadius: BorderRadius.only(
-                                    topLeft: Radius.circular(12),
-                                    topRight: Radius.circular(12),
-                                  ),
-                                ),
-                              ),
-                              backgroundColor: WidgetStateProperty.resolveWith((states) {
-                                if (states.contains(WidgetState.selected)) {
-                                  return AppColors.primary;
-                                }
-                                return AppColors.surfaceVariant;
-                              }),
-                              foregroundColor: WidgetStateProperty.resolveWith((states) {
-                                if (states.contains(WidgetState.selected)) {
-                                  return Colors.black;
-                                }
-                                return AppColors.textPrimary;
-                              }),
-                            ),
-                            segments: const [
-                              ButtonSegment(
-                                value: HeatmapMode.habitsOnly,
-                                label: Text('Только привычки', overflow: TextOverflow.ellipsis),
-                              ),
-                              ButtonSegment(
-                                value: HeatmapMode.allTasks,
-                                label: Text('Все задачи', overflow: TextOverflow.ellipsis),
-                              ),
-                            ],
-                            selected: {state.mode},
-                            onSelectionChanged: (newSelection) {
-                              context.read<HeatmapCubit>().setMode(newSelection.first);
-                            },
-                          ),
-                        ),
-                        Padding(
-                          padding: const EdgeInsets.all(6),
-                          child: CustomContributionHeatmap(
-                            dayDataMap: state.dayDataMap,
-                            minDate: state.minDate,
-                            maxDate: state.maxDate,
-                            today: state.today,
-                            onCellTap: (date) {
-                              DayScreenBottomSheet.show(context, date);
-                            },
-                          ),
-                        ),
-                      ],
-                    ),
-                  );
-                }
-
-                return const SizedBox.shrink();
-              },
+          title: Text(
+            _selectedPage == 0 ? 'Life Calendar' : 'Daily',
+            style: const TextStyle(
+              fontWeight: FontWeight.bold,
+              fontSize: 23,
             ),
-
-            // ================= 2. TASKS SECTION =================
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    title: Row(
+          ),
+          actions: [
+            if (_selectedPage == 0)
+              PopupMenuButton<String>(
+                icon: const Icon(Icons.more_vert),
+                onSelected: (value) async {
+                  if (value == 'target_age') {
+                    await _showTargetAgeDialog(context);
+                  }
+                },
+                itemBuilder: (_) => const [
+                  PopupMenuItem(
+                    value: 'target_age',
+                    child: Row(
                       children: [
-                        const Text(
-                          'Задачи на сегодня',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
+                        Icon(
+                          Icons.tune_rounded,
+                          color: AppColors.primary,
                         ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.add_circle,
-                            color: AppColors.primary,
-                          ),
-                          onPressed: () => AddEditTaskDialog.show(
-                            context,
-                            initialDate: AppDateUtils.today,
-                            onSaved: () async {
-                              if (!context.mounted) return;
-
-                              context.read<TasksCubit>().loadTasksForDate(
-                                AppDateUtils.today,
-                              );
-
-                              await context
-                                  .read<HeatmapCubit>()
-                                  .loadHeatmapData();
-                            },
-                          ),
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            _isTasksExpanded
-                                ? Icons.expand_less
-                                : Icons.expand_more,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _isTasksExpanded = !_isTasksExpanded;
-                            });
-                          },
-                        ),
+                        SizedBox(width: 10),
+                        Text('Настройки календаря'),
                       ],
                     ),
                   ),
-                  if (_isTasksExpanded)
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: TasksList(
-                        date: AppDateUtils.today,
-                        onTaskStatusChanged: () async {
-                          await context.read<HeatmapCubit>().loadHeatmapData();
-                        },
-                        onLockedTap: () {
-                          AppHints.showPastDayHint(context);
-                        },
-                        onEditTask: (dialogContext, task) {
-                          AddEditTaskDialog.show(
-                            dialogContext,
-                            task: task,
-                            initialDate: AppDateUtils.today,
-                            onSaved: () async {
-                              if (!dialogContext.mounted) return;
-
-                              dialogContext
-                                  .read<TasksCubit>()
-                                  .loadTasksForDate(AppDateUtils.today);
-
-                              await dialogContext
-                                  .read<HeatmapCubit>()
-                                  .loadHeatmapData();
-                            },
-                          );
-                        },
-                      ),
-                    ),
                 ],
               ),
-            ),
-
-            // ================= 3. HABITS SECTION =================
-
-            // ================= 3. HABITS SECTION =================
-            Card(
-              child: Column(
-                children: [
-                  ListTile(
-                    title: Row(
-                      children: [
-                        const Text(
-                          'Привычки на сегодня',
-                          style: TextStyle(
-                            fontWeight: FontWeight.bold,
-                            fontSize: 16,
-                          ),
-                        ),
-                        const Spacer(),
-                        IconButton(
-                          icon: const Icon(
-                            Icons.edit,
-                            color: AppColors.primary,
-                          ),
-                          onPressed: () async {
-                            await Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const HabitsScreen(),
-                              ),
-                            );
-
-                            if (context.mounted) {
-                              _reloadAllCubits(context);
-                            }
-                          },
-                        ),
-                        IconButton(
-                          icon: Icon(
-                            _isHabitsExpanded
-                                ? Icons.expand_less
-                                : Icons.expand_more,
-                          ),
-                          onPressed: () {
-                            setState(() {
-                              _isHabitsExpanded = !_isHabitsExpanded;
-                            });
-                          },
-                        ),
-                      ],
-                    ),
-                  ),
-                  if (_isHabitsExpanded)
-                    Padding(
-                      padding: const EdgeInsets.all(8.0),
-                      child: HabitsList(
-                        date: AppDateUtils.today,
-                        onHabitStatusChanged: () async {
-                          await context.read<HeatmapCubit>().loadHeatmapData();
-                        },
-                      ),
-                    ),
-                ],
-              ),
-            ),
-
-            // ================= 4. NOTES PREVIEW SECTION =================
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(12),
-                child: NotesReminderList(
-                  date: AppDateUtils.today,
-                  onAdd: () {
-                    Navigator.push(
-                      context,
-                      MaterialPageRoute(
-                        builder: (_) => const NotesScreen(),
-                      ),
-                    ).then((_) {
-                      if (context.mounted) {
-                        context.read<NotesCubit>().loadNotes();
-                      }
-                    });
-                  },
-                ),
-              ),
-            ),
-
-
-            // ================= 5. DAILY REVIEW SECTION =================
-            BlocBuilder<ReviewsCubit, ReviewsState>(
-              builder: (context, state) {
-                if (state is ReviewsLoaded) {
-                  final review = state.review;
-                  final showEditor = review == null || _isEditingReview;
-
-                  return Card(
-                    child: Padding(
-                      padding: const EdgeInsets.all(16),
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          const Text('Дневной отзыв за сегодня',
-                              style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-                          const SizedBox(height: 12),
-                          if (showEditor) ...[
-                            Row(
-                              children: [
-                                Text('Оценка дня: $_reviewRating'),
-                                Expanded(
-                                  child: Slider(
-                                    value: _reviewRating.toDouble(),
-                                    min: 1,
-                                    max: 10,
-                                    divisions: 9,
-                                    activeColor: AppColors.primary,
-                                    onChanged: (val) {
-                                      setState(() => _reviewRating = val.round());
-                                    },
-                                  ),
-                                ),
-                              ],
-                            ),
-                            TextField(
-                              controller: _reviewDescController,
-                              maxLines: 3,
-                              decoration: const InputDecoration(
-                                hintText: 'Опишите, как прошёл ваш день...',
-                              ),
-                            ),
-                          ],
-                          const SizedBox(height: 12),
-                          if (showEditor)
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton(
-                                onPressed: () async {
-                                  final desc = _reviewDescController.text.trim();
-                                  await context.read<ReviewsCubit>().saveReview(
-                                        AppDateUtils.today,
-                                        desc,
-                                        _reviewRating,
-                                      );
-                                  setState(() => _isEditingReview = false);
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppColors.primary,
-                                  foregroundColor: Colors.black,
-                                ),
-                                child: const Text('Сохранить отзыв'),
-                              ),
-                            )
-                          else ...[
-                            Row(
-                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                              children: [
-                                Text('Оценка: ${review?.rating ?? 5} / 10',
-                                    style: const TextStyle(fontWeight: FontWeight.bold)),
-                                TextButton.icon(
-                                  icon: const Icon(Icons.edit, size: 16),
-                                  label: const Text('Редактировать'),
-                                  onPressed: () {
-                                    setState(() {
-                                      _reviewRating = review?.rating ?? 5;
-                                      _reviewDescController.text = review?.description ?? '';
-                                      _isEditingReview = true;
-                                    });
-                                  },
-                                ),
-                              ],
-                            ),
-                            if (review?.description != null && review!.description.isNotEmpty) ...[
-                              const SizedBox(height: 8),
-                              Text(review.description),
-                            ],
-                          ],
-                        ],
-                      ),
-                    ),
-                  );
-                }
-
-                return const SizedBox.shrink();
-              },
-            ),
+          ],
+        ),
+        body: IndexedStack(
+          index: _selectedPage,
+          children: const [
+            WeekLifeCalendarScreen(),
+            SummaryScreen(),
           ],
         ),
       ),
     );
+  }
+
+  Future<void> _showTargetAgeDialog(BuildContext context) async {
+    final cubit = context.read<LifeCalendarCubit>();
+    final state = cubit.state;
+
+    if (state is! LifeCalendarLoaded) return;
+
+    final controller = TextEditingController(
+      text: state.settings.targetAge.toString(),
+    );
+
+    try {
+      await showDialog<void>(
+        context: context,
+        builder: (dialogContext) {
+          return AlertDialog(
+            title: const Text('Настройки календаря'),
+            content: TextField(
+              controller: controller,
+              keyboardType: TextInputType.number,
+              decoration: const InputDecoration(
+                labelText: 'Возраст отображения',
+              ),
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(dialogContext),
+                child: const Text('Отмена'),
+              ),
+              FilledButton(
+                onPressed: () async {
+                  final age = int.tryParse(controller.text);
+
+                  if (age == null ||
+                      age <= state.settings.startAge ||
+                      age > 120) {
+                    return;
+                  }
+
+                  await cubit.updateTargetAge(age);
+
+                  if (dialogContext.mounted) {
+                    Navigator.pop(dialogContext);
+                  }
+                },
+                child: const Text('Сохранить'),
+              ),
+            ],
+          );
+        },
+      );
+    } finally {
+      controller.dispose();
+    }
   }
 }
