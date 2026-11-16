@@ -60,6 +60,8 @@ class DailyReviews extends Table {
 class LifeCalendarSettings extends Table {
   IntColumn get id => integer().withDefault(const Constant(1))();
 
+  DateTimeColumn get birthDate => dateTime()();
+
   IntColumn get startAge => integer()();
 
   IntColumn get targetAge => integer()();

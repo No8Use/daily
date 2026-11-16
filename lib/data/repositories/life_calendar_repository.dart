@@ -1,4 +1,5 @@
 import 'package:daily/data/database/app_database.dart';
+import 'package:daily/data/models/life_calendar_models.dart';
 import 'package:daily/utils/date_utils.dart';
 import 'package:drift/drift.dart';
 
@@ -12,19 +13,17 @@ class LifeCalendarRepository {
   }
 
   Future<void> saveSettings({
-    required int startAge,
+    required DateTime birthDate,
     required int targetAge,
   }) async {
-    if (startAge < 0 || targetAge <= startAge) {
-      throw ArgumentError('Invalid calendar ages.');
-    }
-
     final existing = await getSettings();
 
     await db.into(db.lifeCalendarSettings).insertOnConflictUpdate(
       LifeCalendarSettingsCompanion(
         id: const Value(1),
-        startAge: Value(startAge),
+        birthDate: Value(
+          AppDateUtils.normalizeDate(birthDate),
+        ),
         targetAge: Value(targetAge),
         startedAt: Value(
           existing?.startedAt ?? AppDateUtils.today,
@@ -34,16 +33,6 @@ class LifeCalendarRepository {
   }
 
   Future<void> updateTargetAge(int targetAge) async {
-    final settings = await getSettings();
-
-    if (settings == null) {
-      throw StateError('Life calendar has not been configured.');
-    }
-
-    if (targetAge <= settings.startAge) {
-      throw ArgumentError('Target age must exceed start age.');
-    }
-
     await (db.update(db.lifeCalendarSettings)
       ..where((table) => table.id.equals(1)))
         .write(
@@ -53,133 +42,133 @@ class LifeCalendarRepository {
     );
   }
 
-  Future<WeeklyReview?> getWeeklyReview(DateTime weekStart) {
-    final normalized = AppDateUtils.normalizeDate(weekStart);
-
-    return (db.select(db.weeklyReviews)
-      ..where((table) => table.weekStart.equals(normalized)))
-        .getSingleOrNull();
-  }
-
   Future<void> saveWeeklyReview({
     required DateTime weekStart,
     required int rating,
     required String description,
   }) async {
-    final normalized = AppDateUtils.normalizeDate(weekStart);
-    final today = AppDateUtils.today;
-
-    // A review is only allowed after the week has ended.
-    final weekEnd = normalized.add(const Duration(days: 6));
-
-    if (weekEnd.isAfter(today) ||
-        weekEnd.isAtSameMomentAs(today) &&
-            today.weekday != DateTime.sunday) {
-      throw StateError('This week has not finished.');
-    }
+    final normalizedWeekStart =
+    AppDateUtils.normalizeDate(weekStart);
 
     await db.into(db.weeklyReviews).insertOnConflictUpdate(
       WeeklyReviewsCompanion.insert(
-        weekStart: normalized,
-        rating: rating.clamp(1, 10),
-        description: Value(description),
+        weekStart: normalizedWeekStart,
+        rating: rating,
+        description: Value(description.trim()),
         createdAt: DateTime.now(),
       ),
     );
   }
 
-  Future<WeekProductivity> getWeekProductivity(
-      DateTime weekStart,
-      ) async {
-    final start = AppDateUtils.normalizeDate(weekStart);
-    final end = start.add(const Duration(days: 6));
-    final today = AppDateUtils.today;
+  Future<LifeCalendarData> getCalendarData({
+    required DateTime from,
+    required DateTime to,
+  }) async {
+    final start = AppDateUtils.normalizeDate(from);
+    final endExclusive = AppDateUtils.normalizeDate(to).add(
+      const Duration(days: 1),
+    );
 
-    final habits = await db.select(db.habits).get();
+    final firstWeekStart = _mondayOf(start);
+    final lastWeekEndExclusive = _mondayOf(to).add(
+      const Duration(days: 7),
+    );
 
-    final completions = await (db.select(db.habitCompletions)
+    final habitsFuture = (db.select(db.habits)
       ..where(
-            (table) => table.date.isBetweenValues(start, end),
-      )).get();
+            (table) =>
+        table.createdAt.isSmallerThanValue(endExclusive) &
+        (
+            table.canceledAt.isNull() |
+            table.canceledAt.isBiggerOrEqualValue(start)
+        ),
+      ))
+        .get();
 
-    final tasks = await (db.select(db.tasks)
+    final completionsFuture = (db.select(db.habitCompletions)
+      ..where(
+            (table) =>
+        table.date.isBiggerOrEqualValue(start) &
+        table.date.isSmallerThanValue(endExclusive),
+      ))
+        .get();
+
+    final tasksFuture = (db.select(db.tasks)
       ..where(
             (table) =>
         table.dueDate.isNotNull() &
-        table.dueDate.isBetweenValues(start, end),
-      )).get();
+        table.dueDate.isBiggerOrEqualValue(start) &
+        table.dueDate.isSmallerThanValue(endExclusive),
+      ))
+        .get();
 
-    var expectedHabitCompletions = 0;
+    final reviewsFuture = (db.select(db.weeklyReviews)
+      ..where(
+            (table) =>
+        table.weekStart.isBiggerOrEqualValue(firstWeekStart) &
+        table.weekStart.isSmallerThanValue(
+          lastWeekEndExclusive,
+        ),
+      ))
+        .get();
 
-    for (final habit in habits) {
-      for (var day = 0; day < 7; day++) {
-        final date = start.add(Duration(days: day));
+    final results = await Future.wait<Object>([
+      habitsFuture,
+      completionsFuture,
+      tasksFuture,
+      reviewsFuture,
+    ]);
 
-        final createdAt = AppDateUtils.normalizeDate(habit.createdAt);
+    final habits = results[0] as List<Habit>;
+    final completions = results[1] as List<HabitCompletion>;
+    final tasks = results[2] as List<Task>;
+    final reviews = results[3] as List<WeeklyReview>;
 
-        final isActive = !date.isBefore(createdAt) &&
-            (habit.canceledAt == null ||
-                date.isBefore(
-                  AppDateUtils.normalizeDate(habit.canceledAt!),
-                ));
-
-        if (isActive && !date.isAfter(today)) {
-          expectedHabitCompletions++;
-        }
-      }
-    }
-
-    final completedHabits = completions
-        .where((completion) => completion.isCompleted)
-        .length;
-
-    final completedTasks = tasks
-        .where((task) => task.isCompleted)
-        .length;
-
-    final totalTasks = tasks.length;
-
-    return WeekProductivity(
-      completedHabits: completedHabits,
-      totalHabitOpportunities: expectedHabitCompletions,
-      completedTasks: completedTasks,
-      totalTasks: totalTasks,
+    return LifeCalendarData(
+      habits: habits
+          .map(
+            (habit) => HabitCalendarRecord(
+          id: habit.id,
+          createdAt: habit.createdAt,
+          canceledAt: habit.canceledAt,
+        ),
+      )
+          .toList(growable: false),
+      completions: completions
+          .map(
+            (completion) => HabitCompletionCalendarRecord(
+          habitId: completion.habitId,
+          date: completion.date,
+          isCompleted: completion.isCompleted,
+        ),
+      )
+          .toList(growable: false),
+      tasks: tasks
+          .map(
+            (task) => TaskCalendarRecord(
+          dueDate: task.dueDate,
+          isCompleted: task.isCompleted,
+        ),
+      )
+          .toList(growable: false),
+      reviews: reviews
+          .map(
+            (review) => WeeklyReviewData(
+          weekStart: review.weekStart,
+          description: review.description,
+          rating: review.rating,
+          createdAt: review.createdAt,
+        ),
+      )
+          .toList(growable: false),
     );
   }
-}
 
-class WeekProductivity {
-  const WeekProductivity({
-    required this.completedHabits,
-    required this.totalHabitOpportunities,
-    required this.completedTasks,
-    required this.totalTasks,
-  });
+  DateTime _mondayOf(DateTime date) {
+    final normalized = AppDateUtils.normalizeDate(date);
 
-  final int completedHabits;
-  final int totalHabitOpportunities;
-
-  final int completedTasks;
-  final int totalTasks;
-
-  double get habitProgress {
-    if (totalHabitOpportunities == 0) return 0;
-
-    return (completedHabits / totalHabitOpportunities)
-        .clamp(0.0, 1.0);
-  }
-
-  double get taskProgress {
-    if (totalTasks == 0) return 0;
-
-    return (completedTasks / totalTasks).clamp(0.0, 1.0);
-  }
-
-  double get overallProgress {
-    final total = totalHabitOpportunities + totalTasks;
-
-    if (total == 0) return 0;
-
-    return (completedHabits + completedTasks) / total;
+    return normalized.subtract(
+      Duration(days: normalized.weekday - DateTime.monday),
+    );
   }
 }

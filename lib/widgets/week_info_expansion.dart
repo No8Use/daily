@@ -1,4 +1,4 @@
-import 'package:daily/data/repositories/life_calendar_repository.dart';
+import 'package:daily/data/models/life_calendar_models.dart';
 import 'package:daily/utils/app_theme.dart';
 import 'package:flutter/material.dart';
 

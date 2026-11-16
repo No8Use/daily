@@ -1765,6 +1765,17 @@ class $LifeCalendarSettingsTable extends LifeCalendarSettings
     requiredDuringInsert: false,
     defaultValue: const Constant(1),
   );
+  static const VerificationMeta _birthDateMeta = const VerificationMeta(
+    'birthDate',
+  );
+  @override
+  late final GeneratedColumn<DateTime> birthDate = GeneratedColumn<DateTime>(
+    'birth_date',
+    aliasedName,
+    false,
+    type: DriftSqlType.dateTime,
+    requiredDuringInsert: true,
+  );
   static const VerificationMeta _startAgeMeta = const VerificationMeta(
     'startAge',
   );
@@ -1799,7 +1810,13 @@ class $LifeCalendarSettingsTable extends LifeCalendarSettings
     requiredDuringInsert: true,
   );
   @override
-  List<GeneratedColumn> get $columns => [id, startAge, targetAge, startedAt];
+  List<GeneratedColumn> get $columns => [
+    id,
+    birthDate,
+    startAge,
+    targetAge,
+    startedAt,
+  ];
   @override
   String get aliasedName => _alias ?? actualTableName;
   @override
@@ -1814,6 +1831,14 @@ class $LifeCalendarSettingsTable extends LifeCalendarSettings
     final data = instance.toColumns(true);
     if (data.containsKey('id')) {
       context.handle(_idMeta, id.isAcceptableOrUnknown(data['id']!, _idMeta));
+    }
+    if (data.containsKey('birth_date')) {
+      context.handle(
+        _birthDateMeta,
+        birthDate.isAcceptableOrUnknown(data['birth_date']!, _birthDateMeta),
+      );
+    } else if (isInserting) {
+      context.missing(_birthDateMeta);
     }
     if (data.containsKey('start_age')) {
       context.handle(
@@ -1852,6 +1877,10 @@ class $LifeCalendarSettingsTable extends LifeCalendarSettings
         DriftSqlType.int,
         data['${effectivePrefix}id'],
       )!,
+      birthDate: attachedDatabase.typeMapping.read(
+        DriftSqlType.dateTime,
+        data['${effectivePrefix}birth_date'],
+      )!,
       startAge: attachedDatabase.typeMapping.read(
         DriftSqlType.int,
         data['${effectivePrefix}start_age'],
@@ -1876,11 +1905,13 @@ class $LifeCalendarSettingsTable extends LifeCalendarSettings
 class LifeCalendarSetting extends DataClass
     implements Insertable<LifeCalendarSetting> {
   final int id;
+  final DateTime birthDate;
   final int startAge;
   final int targetAge;
   final DateTime startedAt;
   const LifeCalendarSetting({
     required this.id,
+    required this.birthDate,
     required this.startAge,
     required this.targetAge,
     required this.startedAt,
@@ -1889,6 +1920,7 @@ class LifeCalendarSetting extends DataClass
   Map<String, Expression> toColumns(bool nullToAbsent) {
     final map = <String, Expression>{};
     map['id'] = Variable<int>(id);
+    map['birth_date'] = Variable<DateTime>(birthDate);
     map['start_age'] = Variable<int>(startAge);
     map['target_age'] = Variable<int>(targetAge);
     map['started_at'] = Variable<DateTime>(startedAt);
@@ -1898,6 +1930,7 @@ class LifeCalendarSetting extends DataClass
   LifeCalendarSettingsCompanion toCompanion(bool nullToAbsent) {
     return LifeCalendarSettingsCompanion(
       id: Value(id),
+      birthDate: Value(birthDate),
       startAge: Value(startAge),
       targetAge: Value(targetAge),
       startedAt: Value(startedAt),
@@ -1911,6 +1944,7 @@ class LifeCalendarSetting extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return LifeCalendarSetting(
       id: serializer.fromJson<int>(json['id']),
+      birthDate: serializer.fromJson<DateTime>(json['birthDate']),
       startAge: serializer.fromJson<int>(json['startAge']),
       targetAge: serializer.fromJson<int>(json['targetAge']),
       startedAt: serializer.fromJson<DateTime>(json['startedAt']),
@@ -1921,6 +1955,7 @@ class LifeCalendarSetting extends DataClass
     serializer ??= driftRuntimeOptions.defaultSerializer;
     return <String, dynamic>{
       'id': serializer.toJson<int>(id),
+      'birthDate': serializer.toJson<DateTime>(birthDate),
       'startAge': serializer.toJson<int>(startAge),
       'targetAge': serializer.toJson<int>(targetAge),
       'startedAt': serializer.toJson<DateTime>(startedAt),
@@ -1929,11 +1964,13 @@ class LifeCalendarSetting extends DataClass
 
   LifeCalendarSetting copyWith({
     int? id,
+    DateTime? birthDate,
     int? startAge,
     int? targetAge,
     DateTime? startedAt,
   }) => LifeCalendarSetting(
     id: id ?? this.id,
+    birthDate: birthDate ?? this.birthDate,
     startAge: startAge ?? this.startAge,
     targetAge: targetAge ?? this.targetAge,
     startedAt: startedAt ?? this.startedAt,
@@ -1941,6 +1978,7 @@ class LifeCalendarSetting extends DataClass
   LifeCalendarSetting copyWithCompanion(LifeCalendarSettingsCompanion data) {
     return LifeCalendarSetting(
       id: data.id.present ? data.id.value : this.id,
+      birthDate: data.birthDate.present ? data.birthDate.value : this.birthDate,
       startAge: data.startAge.present ? data.startAge.value : this.startAge,
       targetAge: data.targetAge.present ? data.targetAge.value : this.targetAge,
       startedAt: data.startedAt.present ? data.startedAt.value : this.startedAt,
@@ -1951,6 +1989,7 @@ class LifeCalendarSetting extends DataClass
   String toString() {
     return (StringBuffer('LifeCalendarSetting(')
           ..write('id: $id, ')
+          ..write('birthDate: $birthDate, ')
           ..write('startAge: $startAge, ')
           ..write('targetAge: $targetAge, ')
           ..write('startedAt: $startedAt')
@@ -1959,12 +1998,14 @@ class LifeCalendarSetting extends DataClass
   }
 
   @override
-  int get hashCode => Object.hash(id, startAge, targetAge, startedAt);
+  int get hashCode =>
+      Object.hash(id, birthDate, startAge, targetAge, startedAt);
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       (other is LifeCalendarSetting &&
           other.id == this.id &&
+          other.birthDate == this.birthDate &&
           other.startAge == this.startAge &&
           other.targetAge == this.targetAge &&
           other.startedAt == this.startedAt);
@@ -1973,31 +2014,37 @@ class LifeCalendarSetting extends DataClass
 class LifeCalendarSettingsCompanion
     extends UpdateCompanion<LifeCalendarSetting> {
   final Value<int> id;
+  final Value<DateTime> birthDate;
   final Value<int> startAge;
   final Value<int> targetAge;
   final Value<DateTime> startedAt;
   const LifeCalendarSettingsCompanion({
     this.id = const Value.absent(),
+    this.birthDate = const Value.absent(),
     this.startAge = const Value.absent(),
     this.targetAge = const Value.absent(),
     this.startedAt = const Value.absent(),
   });
   LifeCalendarSettingsCompanion.insert({
     this.id = const Value.absent(),
+    required DateTime birthDate,
     required int startAge,
     required int targetAge,
     required DateTime startedAt,
-  }) : startAge = Value(startAge),
+  }) : birthDate = Value(birthDate),
+       startAge = Value(startAge),
        targetAge = Value(targetAge),
        startedAt = Value(startedAt);
   static Insertable<LifeCalendarSetting> custom({
     Expression<int>? id,
+    Expression<DateTime>? birthDate,
     Expression<int>? startAge,
     Expression<int>? targetAge,
     Expression<DateTime>? startedAt,
   }) {
     return RawValuesInsertable({
       if (id != null) 'id': id,
+      if (birthDate != null) 'birth_date': birthDate,
       if (startAge != null) 'start_age': startAge,
       if (targetAge != null) 'target_age': targetAge,
       if (startedAt != null) 'started_at': startedAt,
@@ -2006,12 +2053,14 @@ class LifeCalendarSettingsCompanion
 
   LifeCalendarSettingsCompanion copyWith({
     Value<int>? id,
+    Value<DateTime>? birthDate,
     Value<int>? startAge,
     Value<int>? targetAge,
     Value<DateTime>? startedAt,
   }) {
     return LifeCalendarSettingsCompanion(
       id: id ?? this.id,
+      birthDate: birthDate ?? this.birthDate,
       startAge: startAge ?? this.startAge,
       targetAge: targetAge ?? this.targetAge,
       startedAt: startedAt ?? this.startedAt,
@@ -2023,6 +2072,9 @@ class LifeCalendarSettingsCompanion
     final map = <String, Expression>{};
     if (id.present) {
       map['id'] = Variable<int>(id.value);
+    }
+    if (birthDate.present) {
+      map['birth_date'] = Variable<DateTime>(birthDate.value);
     }
     if (startAge.present) {
       map['start_age'] = Variable<int>(startAge.value);
@@ -2040,6 +2092,7 @@ class LifeCalendarSettingsCompanion
   String toString() {
     return (StringBuffer('LifeCalendarSettingsCompanion(')
           ..write('id: $id, ')
+          ..write('birthDate: $birthDate, ')
           ..write('startAge: $startAge, ')
           ..write('targetAge: $targetAge, ')
           ..write('startedAt: $startedAt')
@@ -3654,6 +3707,7 @@ typedef $$DailyReviewsTableProcessedTableManager =
 typedef $$LifeCalendarSettingsTableCreateCompanionBuilder =
     LifeCalendarSettingsCompanion Function({
       Value<int> id,
+      required DateTime birthDate,
       required int startAge,
       required int targetAge,
       required DateTime startedAt,
@@ -3661,6 +3715,7 @@ typedef $$LifeCalendarSettingsTableCreateCompanionBuilder =
 typedef $$LifeCalendarSettingsTableUpdateCompanionBuilder =
     LifeCalendarSettingsCompanion Function({
       Value<int> id,
+      Value<DateTime> birthDate,
       Value<int> startAge,
       Value<int> targetAge,
       Value<DateTime> startedAt,
@@ -3677,6 +3732,11 @@ class $$LifeCalendarSettingsTableFilterComposer
   });
   ColumnFilters<int> get id => $composableBuilder(
     column: $table.id,
+    builder: (column) => ColumnFilters(column),
+  );
+
+  ColumnFilters<DateTime> get birthDate => $composableBuilder(
+    column: $table.birthDate,
     builder: (column) => ColumnFilters(column),
   );
 
@@ -3710,6 +3770,11 @@ class $$LifeCalendarSettingsTableOrderingComposer
     builder: (column) => ColumnOrderings(column),
   );
 
+  ColumnOrderings<DateTime> get birthDate => $composableBuilder(
+    column: $table.birthDate,
+    builder: (column) => ColumnOrderings(column),
+  );
+
   ColumnOrderings<int> get startAge => $composableBuilder(
     column: $table.startAge,
     builder: (column) => ColumnOrderings(column),
@@ -3737,6 +3802,9 @@ class $$LifeCalendarSettingsTableAnnotationComposer
   });
   GeneratedColumn<int> get id =>
       $composableBuilder(column: $table.id, builder: (column) => column);
+
+  GeneratedColumn<DateTime> get birthDate =>
+      $composableBuilder(column: $table.birthDate, builder: (column) => column);
 
   GeneratedColumn<int> get startAge =>
       $composableBuilder(column: $table.startAge, builder: (column) => column);
@@ -3792,11 +3860,13 @@ class $$LifeCalendarSettingsTableTableManager
           updateCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                Value<DateTime> birthDate = const Value.absent(),
                 Value<int> startAge = const Value.absent(),
                 Value<int> targetAge = const Value.absent(),
                 Value<DateTime> startedAt = const Value.absent(),
               }) => LifeCalendarSettingsCompanion(
                 id: id,
+                birthDate: birthDate,
                 startAge: startAge,
                 targetAge: targetAge,
                 startedAt: startedAt,
@@ -3804,11 +3874,13 @@ class $$LifeCalendarSettingsTableTableManager
           createCompanionCallback:
               ({
                 Value<int> id = const Value.absent(),
+                required DateTime birthDate,
                 required int startAge,
                 required int targetAge,
                 required DateTime startedAt,
               }) => LifeCalendarSettingsCompanion.insert(
                 id: id,
+                birthDate: birthDate,
                 startAge: startAge,
                 targetAge: targetAge,
                 startedAt: startedAt,
