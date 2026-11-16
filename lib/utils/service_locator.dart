@@ -1,10 +1,14 @@
+import 'dart:math';
+
 import 'package:daily/cubits/habits/habits_cubit.dart';
 import 'package:daily/cubits/heatmap/heatmap_cubit.dart';
+import 'package:daily/cubits/life_calendar/life_calendar_cubit.dart';
 import 'package:daily/cubits/notes/notes_cubit.dart';
 import 'package:daily/cubits/reviews/reviews_cubit.dart';
 import 'package:daily/cubits/tasks/tasks_cubit.dart';
 import 'package:daily/data/database/app_database.dart';
 import 'package:daily/data/repositories/habits_repository.dart';
+import 'package:daily/data/repositories/life_calendar_repository.dart';
 import 'package:daily/data/repositories/notes_repository.dart';
 import 'package:daily/data/repositories/reviews_repository.dart';
 import 'package:daily/data/repositories/tasks_repository.dart';
@@ -42,4 +46,13 @@ Future<void> setupServiceLocator() async {
       tasksRepository: getIt<TasksRepository>(),
     ),
   );
+  getIt.registerLazySingleton<LifeCalendarRepository>(
+        () => LifeCalendarRepository(getIt<AppDatabase>()),
+  );
+  getIt.registerFactory<LifeCalendarCubit>(
+        () => LifeCalendarCubit(getIt<LifeCalendarRepository>()),
+  );
+
+  // Utils
+  getIt.registerLazySingleton<Random>(() => Random());
 }

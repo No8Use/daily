@@ -3,6 +3,7 @@ import 'dart:async';
 import 'package:daily/cubits/tasks/tasks_state.dart';
 import 'package:daily/data/repositories/tasks_repository.dart';
 import 'package:daily/utils/date_utils.dart';
+import 'package:daily/utils/models/operation_result.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class TasksCubit extends Cubit<TasksState> {
@@ -20,7 +21,7 @@ class TasksCubit extends Cubit<TasksState> {
     _tasksSub?.cancel();
     _tasksSub = repository.watchTasksForDate(_currentDate).listen((tasks) {
       emit(TasksLoaded(
-        todayTasks: tasks,
+        loadedTasks: tasks,
         selectedDate: _currentDate,
       ));
     }, onError: (e) {
@@ -36,11 +37,27 @@ class TasksCubit extends Cubit<TasksState> {
     }
   }
 
-  Future<void> toggleTask(int id, bool currentStatus) async {
+  Future<OperationResult> toggleTask(
+      int id,
+      bool previousStateForToggle,
+      ) async {
     try {
-      await repository.toggleTaskCompletion(id, !currentStatus);
+      final success = await repository.toggleTaskCompletion(
+        id,
+        !previousStateForToggle,
+      );
+
+      if (!success) {
+        return const OperationResult.failure(
+          'Задача не найдена или не была обновлена.',
+        );
+      }
+
+      return const OperationResult.success();
     } catch (e) {
-      emit(TasksError('Не удалось изменить статус задачи: $e'));
+      return OperationResult.failure(
+        'Не удалось изменить статус задачи: $e',
+      );
     }
   }
 

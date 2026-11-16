@@ -16,16 +16,16 @@ class HabitsLoaded extends HabitsState {
   final List<Habit> activeHabits;
   final List<Habit> allHabits;
   /// Map of habitId -> completion status for today (or loaded date)
-  final Map<int, bool> todayCompletions;
+  final Map<int, bool> loadedCompletions;
 
   const HabitsLoaded({
     required this.activeHabits,
     required this.allHabits,
-    required this.todayCompletions,
+    required this.loadedCompletions,
   });
 
   @override
-  List<Object?> get props => [activeHabits, allHabits, todayCompletions];
+  List<Object?> get props => [activeHabits, allHabits, loadedCompletions];
 }
 
 class HabitsError extends HabitsState {

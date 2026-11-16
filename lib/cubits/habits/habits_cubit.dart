@@ -3,86 +3,144 @@ import 'dart:async';
 import 'package:daily/cubits/habits/habits_state.dart';
 import 'package:daily/data/repositories/habits_repository.dart';
 import 'package:daily/utils/date_utils.dart';
+import 'package:daily/utils/models/operation_result.dart';
 import 'package:flutter_bloc/flutter_bloc.dart';
 
 class HabitsCubit extends Cubit<HabitsState> {
   final HabitsRepository repository;
+
   StreamSubscription? _habitsSub;
   StreamSubscription? _completionsSub;
 
+  DateTime? _currentDate;
+
   HabitsCubit(this.repository) : super(HabitsInitial());
 
-  /// Initializes streams for habits and today's completions.
-  void loadHabits() {
+  void loadHabits([DateTime? date]) {
+    _currentDate = date != null
+        ? AppDateUtils.normalizeDate(date)
+        : AppDateUtils.today;
+
     emit(HabitsLoading());
-    _subscribe();
+    _subscribe(_currentDate!);
   }
 
-  void _subscribe() {
+  void _subscribe(DateTime targetDate) {
     _habitsSub?.cancel();
     _completionsSub?.cancel();
 
-    final today = AppDateUtils.today;
+    _habitsSub = repository.watchAllHabits().listen(
+          (allHabits) {
+        final activeHabits = allHabits
+            .where((habit) => habit.canceledAt == null)
+            .toList();
 
-    _habitsSub = repository.watchAllHabits().listen((allHabits) {
-      _completionsSub?.cancel();
-      _completionsSub = repository.watchCompletionsForDate(today).listen((completions) {
-        final activeHabits = allHabits.where((h) => h.canceledAt == null).toList();
-        final completionsMap = <int, bool>{};
-        for (final c in completions) {
-          completionsMap[c.habitId] = c.isCompleted;
-        }
+        _completionsSub?.cancel();
 
-        emit(HabitsLoaded(
-          activeHabits: activeHabits,
-          allHabits: allHabits,
-          todayCompletions: completionsMap,
-        ));
-      }, onError: (e) {
-        emit(HabitsError('Ошибка загрузки статуса привычек: $e'));
-      });
-    }, onError: (e) {
-      emit(HabitsError('Ошибка загрузки привычек: $e'));
-    });
+        _completionsSub = repository
+            .watchCompletionsForDate(targetDate)
+            .listen(
+              (completions) {
+            final completionsMap = <int, bool>{};
+
+            for (final completion in completions) {
+              completionsMap[completion.habitId] =
+                  completion.isCompleted;
+            }
+
+            emit(
+              HabitsLoaded(
+                activeHabits: activeHabits,
+                allHabits: allHabits,
+                loadedCompletions: completionsMap,
+              ),
+            );
+          },
+          onError: (error) {
+            emit(
+              HabitsError(
+                'Ошибка загрузки статуса привычек: $error',
+              ),
+            );
+          },
+        );
+      },
+      onError: (error) {
+        emit(HabitsError('Ошибка загрузки привычек: $error'));
+      },
+    );
   }
 
-  Future<void> toggleCompletion(int habitId, DateTime date, bool currentCompleted) async {
+  Future<OperationResult> toggleCompletion(
+      int habitId,
+      DateTime date,
+      bool isCompleted,
+      ) async {
     try {
-      await repository.toggleHabitCompletion(habitId, date, !currentCompleted);
-    } catch (e) {
-      emit(HabitsError('Не удалось обновить статус привычки: $e'));
+      final normalizedDate = AppDateUtils.normalizeDate(date);
+
+      await repository.toggleHabitCompletion(
+        habitId,
+        normalizedDate,
+        isCompleted,
+      );
+
+      return const OperationResult.success();
+    } catch (error) {
+      final message = 'Не удалось обновить статус привычки: $error';
+
+      emit(HabitsError(message));
+
+      return OperationResult.failure(message);
     }
   }
 
   Future<void> createHabit(String title, String? description) async {
     try {
       await repository.createHabit(title, description);
-    } catch (e) {
-      emit(HabitsError('Не удалось создать привычку: $e'));
+    } catch (error) {
+      emit(HabitsError('Не удалось создать привычку: $error'));
+      rethrow;
     }
   }
 
-  Future<void> updateHabit(int id, String title, String? description) async {
+  Future<void> updateHabit(
+      int id,
+      String title,
+      String? description,
+      ) async {
     try {
       await repository.updateHabit(id, title, description);
-    } catch (e) {
-      emit(HabitsError('Не удалось обновить привычку: $e'));
+    } catch (error) {
+      emit(HabitsError('Не удалось обновить привычку: $error'));
+      rethrow;
     }
   }
 
   Future<void> cancelHabit(int id) async {
     try {
       await repository.cancelHabit(id);
-    } catch (e) {
-      emit(HabitsError('Не удалось отменить привычку: $e'));
+    } catch (error) {
+      emit(HabitsError('Не удалось отменить привычку: $error'));
+      rethrow;
     }
   }
 
   Future<void> restoreHabit(int id) async {
     try {
       await repository.restoreHabit(id);
-    } catch (e) {
-      emit(HabitsError('Не удалось восстановить привычку: $e'));
+    } catch (error) {
+      emit(HabitsError('Не удалось восстановить привычку: $error'));
+      rethrow;
+    }
+  }
+
+  Future<void> deleteHabit(int id) async {
+    try {
+      await repository.deleteHabitIfCreatedToday(id);
+    } catch (error) {
+      emit(HabitsError('Не удалось удалить привычку: $error'));
+      rethrow;
     }
   }
 
@@ -90,6 +148,7 @@ class HabitsCubit extends Cubit<HabitsState> {
   Future<void> close() {
     _habitsSub?.cancel();
     _completionsSub?.cancel();
+
     return super.close();
   }
 }

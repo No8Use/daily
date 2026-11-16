@@ -61,6 +61,34 @@ class HabitsRepository {
     ).then((rows) => rows > 0);
   }
 
+  /// Permanently deletes a habit only if it was created today.
+  ///
+  /// This method must never delete habits containing historical completions.
+  Future<bool> deleteHabitIfCreatedToday(int id) {
+    return db.transaction(() async {
+      final habit = await (db.select(db.habits)
+        ..where((tbl) => tbl.id.equals(id)))
+          .getSingleOrNull();
+
+      if (habit == null) {
+        return false;
+      }
+
+      final createdDate = AppDateUtils.normalizeDate(habit.createdAt);
+      final today = AppDateUtils.today;
+
+      if (createdDate != today) {
+        throw StateError(
+          'Cannot permanently delete a habit created before today.',
+        );
+      }
+
+      return (db.delete(db.habits)..where((tbl) => tbl.id.equals(id)))
+          .go()
+          .then((rows) => rows > 0);
+    });
+  }
+
   /// Streams completions for a given date.
   Stream<List<HabitCompletion>> watchCompletionsForDate(DateTime date) {
     final normalizedDate = AppDateUtils.normalizeDate(date);
@@ -91,15 +119,28 @@ class HabitsRepository {
     return db.select(db.habitCompletions).get();
   }
 
-  /// Toggles habit completion status for a specific date (Upsert).
+  /// Toggles habit completion status for a specific date (Upsert with proper existence check).
   Future<void> toggleHabitCompletion(int habitId, DateTime date, bool isCompleted) async {
     final normalizedDate = AppDateUtils.normalizeDate(date);
-    await db.into(db.habitCompletions).insertOnConflictUpdate(
-          HabitCompletionsCompanion.insert(
-            habitId: habitId,
-            date: normalizedDate,
-            isCompleted: Value(isCompleted),
-          ),
-        );
+
+    final existing = await (db.select(db.habitCompletions)
+          ..where((tbl) => tbl.habitId.equals(habitId) & tbl.date.equals(normalizedDate)))
+        .getSingleOrNull();
+
+    if (existing != null) {
+      await (db.update(db.habitCompletions)
+            ..where((tbl) => tbl.id.equals(existing.id)))
+          .write(HabitCompletionsCompanion(
+        isCompleted: Value(isCompleted),
+      ));
+    } else {
+      await db.into(db.habitCompletions).insert(
+            HabitCompletionsCompanion.insert(
+              habitId: habitId,
+              date: normalizedDate,
+              isCompleted: Value(isCompleted),
+            ),
+          );
+    }
   }
 }

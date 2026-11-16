@@ -13,16 +13,16 @@ class TasksInitial extends TasksState {}
 class TasksLoading extends TasksState {}
 
 class TasksLoaded extends TasksState {
-  final List<Task> todayTasks;
+  final List<Task> loadedTasks;
   final DateTime selectedDate;
 
   const TasksLoaded({
-    required this.todayTasks,
+    required this.loadedTasks,
     required this.selectedDate,
   });
 
   @override
-  List<Object?> get props => [todayTasks, selectedDate];
+  List<Object?> get props => [loadedTasks, selectedDate];
 }
 
 class TasksError extends TasksState {
